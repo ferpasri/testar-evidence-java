@@ -2,7 +2,7 @@
 
 The library records what a testing tool observed, which actions it discovered, what it executed, and the outcomes reported by its test oracles. An adapter translates tool data into these generic records.
 
-The [shared model semantics](https://github.com/ferpasri/testar-state-model-specs/blob/main/docs/model-semantics.md) define the evidence meaning. This document describes the Java API and its implemented behavior.
+The [shared model semantics](https://github.com/ferpasri/testar-state-model-specs/blob/main/docs/model-semantics.md) define the evidence meaning. This document describes the Java API in `org.testar.statemodel.evidence` and its implemented behavior.
 
 ## Records and properties
 

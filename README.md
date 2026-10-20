@@ -19,7 +19,7 @@ Use Java 17 or later and Maven 3.6.3 or later. Run these commands from this repo
 Prepare the shared conformance cases:
 
 ```powershell
-mvn test-compile exec:java "-Dexec.mainClass=org.testar.statemodel.tools.PrepareConformance" "-Dexec.classpathScope=test"
+mvn test-compile exec:java "-Dexec.mainClass=org.testar.statemodel.evidence.tools.PrepareConformance" "-Dexec.classpathScope=test"
 ```
 
 Run the tests and build the JAR:
@@ -67,14 +67,14 @@ dependencies {
 }
 ```
 
-Public API classes are in `org.testar.statemodel`.
+Public API classes are in `org.testar.statemodel.evidence`.
 
 ## Example
 
-[LocalModel.java](src/test/java/org/testar/statemodel/examples/LocalModel.java) records two demonstration observations, two candidate buttons, one completed action, and one property evaluation. Comments explain the recording steps.
+[LocalModel.java](src/test/java/org/testar/statemodel/evidence/examples/LocalModel.java) records two demonstration observations, two candidate buttons, one completed action, and one property evaluation. Comments explain the recording steps.
 
 ```powershell
-mvn test-compile exec:java "-Dexec.mainClass=org.testar.statemodel.examples.LocalModel" "-Dexec.classpathScope=test"
+mvn test-compile exec:java "-Dexec.mainClass=org.testar.statemodel.evidence.examples.LocalModel" "-Dexec.classpathScope=test"
 ```
 
 Open the generated `target/example-model/` directory in the state model dashboard. Running the example again reuses the same event IDs, preserving the existing records without duplication.
