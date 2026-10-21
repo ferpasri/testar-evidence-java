@@ -25,9 +25,19 @@ The [shared model semantics](https://github.com/ferpasri/testar-state-model-spec
 
 Every visit has its own observation ID. Identical snapshot content can share a snapshot ID while the visits and execution history remain separate. Snapshot IDs retain fixed content.
 
-Widget IDs are local to their snapshot. Parents refer to widgets in that snapshot, and the hierarchy is acyclic. Several root widgets are allowed. Capture scope records complete, filtered, or unavailable widget information. Properties preserve missing values separately from explicit nulls. Source-prefixed properties can retain tool-specific details.
+Widget IDs are local to their snapshot. Parents refer to widgets in that snapshot, and the hierarchy is acyclic. Several root widgets are allowed. Properties preserve missing values separately from explicit nulls. Source-prefixed properties can retain tool-specific details.
 
 IDs and property names are nonblank strings without control characters. The producer supplies IDs that distinguish its records across runs and sources.
+
+## Capture and property meanings
+
+Capture scope describes whether the supplied widget tree is complete, filtered, or unavailable. A tool can capture every available widget while saving only selected properties. The capture description identifies which properties are collected and, if known, explains exclusions or limitations.
+
+The library preserves `evidence.capture`, `evidence.omitted_properties`, and `evidence.property_aliases` in the supplied state or widget properties. An alias declares a second name for the same captured property within one record. The adapter implementer verifies the source property's meaning before declaring it. Cross-source comparisons use separately defined matching rules.
+
+A state-level `ui.title` records the application's page, screen, or window title; `ui.url` records its full captured address. A widget's title attribute, visible text, and accessible name have different meanings. The adapter preserves the actual source property and uses a common name only when its documented meaning agrees. The library retains supplied names and values.
+
+The shared [capture guidance](https://github.com/ferpasri/testar-state-model-specs/blob/main/docs/capture-evidence.md) defines the optional descriptions and aliases.
 
 ## Discovered actions and exploration
 
@@ -56,7 +66,7 @@ A run starts before its observations, and action definitions precede their candi
 
 `StateModel.validate` checks an event without applying it. `StateModel.apply` validates before updating the model. An identical event retry returns `false`. Different content using an existing event ID raises a conflict.
 
-`ExecutionRecord` exposes the selected action and its status: selected, submitted, rejected, observed, or incomplete. A completed execution produces an `ExecutionLink` from its source observation to its result. Submission acceptance records what happened at that stage; test oracle results describe evaluated conditions separately.
+`ExecutionRecord` exposes the selected action and its status: selected, submitted, rejected, observed, or incomplete. A completed execution produces an `ExecutionLink` from its source observation to its result. Submission acceptance records whether the testing tool's runner, driver, or execution wrapper accepted the action. A rejected submission retains the reported error and has no completed result link. An executed click followed by an application message such as "Incorrect password" has a resulting observation containing that response. Test oracle results describe evaluated conditions separately.
 
 ## Test oracle results
 
@@ -65,6 +75,8 @@ A test oracle applies a rule to a target. The adapter records one evaluation as 
 Targets can identify a run, observation, state property, widget, widget property, execution, or inclusive observation sequence. Referenced records belong to the result's run. A widget belongs to its referenced observation. A property's presence can itself be evaluated, so the target may name an absent property.
 
 Passed and failed report whether the condition was satisfied. Pending means the evaluation had no definite result when recorded; unknown means the oracle could not determine an outcome. Error records an evaluation problem. Finishing a run retains these reported statuses. Results may arrive after the run finishes.
+
+Each report remains a separate result, including repeated reports for the same rule and target. The library preserves the optional `evidence.assessment` object in result details, including the reporting phase, temporal meaning, and supplied termination reason. An open-ended condition can remain pending when a run ends; an explicitly bounded evaluation concerns its named recorded observations. The test oracle supplies the outcome and the adapter records it. See [temporal assessments](https://github.com/ferpasri/testar-state-model-specs/blob/main/docs/check-evaluations.md#conditions-evaluated-over-time).
 
 `ExpectedValue.unspecified()` omits an expectation. `ExpectedValue.of(null)` records an explicit JSON null. An actual reading can contain a value, established absence, or unknown information; omitting the reading means none was supplied. Optional rule versions and parameter maps retain whether they were supplied.
 
@@ -94,6 +106,6 @@ The Java reader rejects invalid UTF-8, duplicate JSON keys, unknown structural f
 
 The [README](../README.md#shared-conformance-data) describes preparation of the newest published specs cases and the local cache. Tests discover released cases and verify their cached checksums.
 
-Reader tests compare accepted records or rejected targets with the released expectations. Producer tests write equivalent evidence through the public API, verify field and artifact preservation, check identical retries and rejection behavior, and reopen the accepted evidence.
+Reader tests compare accepted records or rejected targets with the released expectations. Producer tests write equivalent evidence through the public API, compare the complete accepted event history, verify field and artifact preservation, check identical retries and rejection behavior, and reopen the accepted evidence. Reader and producer tests also verify run ending reasons and the ordered, independent check results. The shared cases exercise capture descriptions and aliases, discovered candidates, scripted parameters, rejected submissions, and temporal results.
 
 Unit tests cover record validation, candidate preservation, repeated visits, execution ordering, evaluation targets, event retries, writer locking, artifact integrity, and recovery.

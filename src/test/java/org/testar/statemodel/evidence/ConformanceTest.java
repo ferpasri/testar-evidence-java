@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -31,7 +32,7 @@ class ConformanceTest {
         if (expected.path("status").asText().equals("accepted")) {
             StateModel model = EvidenceReader.read(source);
             assertEquals(expected, summary(model));
-            assertRecords(model, events(source));
+            assertHistory(model, events(source));
         } else {
             ModelException error = assertThrows(ModelException.class, () -> EvidenceReader.read(source));
             assertEquals(expected.path("error").path("code").asText(), error.code());
@@ -57,6 +58,7 @@ class ConformanceTest {
         Path destination = temporary.resolve("produce-" + source.getFileName());
         Manifest manifest = EvidenceJson.readManifest(Files.readString(source.resolve("manifest.json")));
         JsonNode failure = null;
+        List<EventEnvelope> accepted = new ArrayList<>();
         StateModel result;
         try (JsonlStore store = JsonlStore.create(destination, manifest)) {
             for (EventEnvelope event : events(source)) {
@@ -71,6 +73,7 @@ class ConformanceTest {
                 byte[] before = Files.readAllBytes(destination.resolve("evidence.jsonl"));
                 try {
                     assertTrue(store.record(event));
+                    accepted.add(event);
                     assertFalse(store.record(event), "Identical retry must not append another record");
                     assertRecords(store.model(), List.of(event));
                 } catch (ModelException rejected) {
@@ -91,11 +94,13 @@ class ConformanceTest {
         }
         try (JsonlStore reopened = JsonlStore.open(destination)) {
             assertEquals(summary(result), summary(reopened.model()));
+            assertHistory(reopened.model(), accepted);
         }
         assertEquals(EvidenceJson.parse(Files.readString(source.resolve("manifest.json"))),
             EvidenceJson.parse(Files.readString(destination.resolve("manifest.json"))));
         List<EventEnvelope> produced = events(destination);
-        assertRecords(result, produced);
+        assertEquals(accepted, produced, "The complete accepted event history must survive storage");
+        assertHistory(result, produced);
         for (Observation observation : result.observations()) {
             for (ArtifactReference artifact : observation.artifacts()) {
                 assertArrayEquals(Files.readAllBytes(source.resolve(artifact.path())),
@@ -113,6 +118,17 @@ class ConformanceTest {
         }).toList();
     }
 
+    private static void assertHistory(StateModel model, List<EventEnvelope> events) {
+        assertRecords(model, events);
+        List<CheckResult> checks = events.stream()
+            .map(EventEnvelope::event)
+            .filter(Event.Checked.class::isInstance)
+            .map(Event.Checked.class::cast)
+            .map(Event.Checked::data)
+            .toList();
+        assertEquals(checks, model.checks(), "Each reported result remains separate and in recording order");
+    }
+
     private static void assertRecords(StateModel model, List<EventEnvelope> events) {
         for (EventEnvelope envelope : events) {
             Event event = envelope.event();
@@ -126,6 +142,10 @@ class ConformanceTest {
                 assertEquals(value.data(), model.execution(value.data().id()).orElseThrow().execution());
             } else if (event instanceof Event.Checked value) {
                 assertTrue(model.checks().contains(value.data()));
+            } else if (event instanceof Event.RunFinished value) {
+                RunRecord run = model.run(value.run()).orElseThrow();
+                assertTrue(run.finished());
+                assertEquals(value.reason(), run.reason());
             }
         }
     }

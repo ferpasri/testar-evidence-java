@@ -8,9 +8,11 @@ Every visit remains a separate observation. Completed executions connect their s
 
 Captured properties and oracle evaluations are separate evidence. Check results identify what was evaluated, the rule, its outcome, and any reported reading.
 
+The library preserves supplied property names and values, capture descriptions, known omissions, and declared aliases. Adapters use common names when the source provides the documented property. See the shared [capture guidance](https://github.com/ferpasri/testar-state-model-specs/blob/main/docs/capture-evidence.md).
+
 ## Release versions
 
-Releases use `0.X.Y`. The `0.X` release series is shared with the specs and related state-model projects. Each project increments `Y` independently for fixes and improvements within that series. For example, library `0.2.1` and adapter `0.2.3` belong to the same `0.2` series as specs `0.2.0`.
+Releases use `0.X.Y`. The `0.X` release series is shared with the specs and related state-model projects. Each project increments `Y` independently for fixes and improvements within that series. Different patch versions can coexist within the same release series.
 
 ## Build and test
 
@@ -34,7 +36,7 @@ To compile and package without running tests:
 mvn -DskipTests package
 ```
 
-The library is built as `target/testar-state-model-0.2.0.jar`.
+The library is built as `target/testar-state-model-0.2.1.jar`.
 
 ## Import the library
 
@@ -50,7 +52,7 @@ A consuming Maven project can then declare:
 <dependency>
     <groupId>org.testar</groupId>
     <artifactId>testar-state-model</artifactId>
-    <version>0.2.0</version>
+    <version>0.2.1</version>
 </dependency>
 ```
 
@@ -63,7 +65,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.testar:testar-state-model:0.2.0'
+    implementation 'org.testar:testar-state-model:0.2.1'
 }
 ```
 
@@ -89,7 +91,7 @@ Archive paths, extraction sizes, and case completeness are checked. Preparation 
 
 After successful preparation, tests use the cached cases offline. Running tests alone uses that prepared selection; repeat preparation to check compatibility with the latest release, including before tests in CI. Deleting `target/` removes both the cache and build output.
 
-Tests discover every released case directory. Reader tests load supplied evidence. Producer tests record equivalent evidence through the public API and reopen it. Both compare the records and rejected-case expectations, preserve artifact bytes, and verify that rejection leaves the accepted evidence unchanged.
+Tests discover every released case directory. Reader tests load supplied evidence. Producer tests record equivalent evidence through the public API and reopen it. Both compare the records and rejected-case expectations, preserve artifact bytes, and verify that rejection leaves the accepted evidence unchanged. Cases include capture limits and aliases, unselected candidates, scripted action parameters, rejected submissions, and temporal results reported during and after a run.
 
 ## Documents
 
