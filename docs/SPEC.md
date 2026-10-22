@@ -2,7 +2,7 @@
 
 The library records what a testing tool observed, which actions it discovered, what it executed, and the outcomes reported by its test oracles. An adapter translates tool data into these generic records.
 
-The [shared model semantics](https://github.com/ferpasri/testar-state-model-specs/blob/main/docs/model-semantics.md) define the evidence meaning. This document describes the Java API in `org.testar.statemodel.evidence` and its implemented behavior.
+The [shared model semantics](https://github.com/ferpasri/testar-evidence-specs/blob/main/docs/model-semantics.md) define the evidence meaning. This document describes the Java API in `org.testar.evidence` and its implemented behavior.
 
 ## Records and properties
 
@@ -37,7 +37,7 @@ The library preserves `evidence.capture`, `evidence.omitted_properties`, and `ev
 
 A state-level `ui.title` records the application's page, screen, or window title; `ui.url` records its full captured address. A widget's title attribute, visible text, and accessible name have different meanings. The adapter preserves the actual source property and uses a common name only when its documented meaning agrees. The library retains supplied names and values.
 
-The shared [capture guidance](https://github.com/ferpasri/testar-state-model-specs/blob/main/docs/capture-evidence.md) defines the optional descriptions and aliases.
+The shared [capture guidance](https://github.com/ferpasri/testar-evidence-specs/blob/main/docs/capture-evidence.md) defines the optional descriptions and aliases.
 
 ## Discovered actions and exploration
 
@@ -76,7 +76,7 @@ Targets can identify a run, observation, state property, widget, widget property
 
 Passed and failed report whether the condition was satisfied. Pending means the evaluation had no definite result when recorded; unknown means the oracle could not determine an outcome. Error records an evaluation problem. Finishing a run retains these reported statuses. Results may arrive after the run finishes.
 
-Each report remains a separate result, including repeated reports for the same rule and target. The library preserves the optional `evidence.assessment` object in result details, including the reporting phase, temporal meaning, and supplied termination reason. An open-ended condition can remain pending when a run ends; an explicitly bounded evaluation concerns its named recorded observations. The test oracle supplies the outcome and the adapter records it. See [temporal assessments](https://github.com/ferpasri/testar-state-model-specs/blob/main/docs/check-evaluations.md#conditions-evaluated-over-time).
+Each report remains a separate result, including repeated reports for the same rule and target. The library preserves the optional `evidence.assessment` object in result details, including the reporting phase, temporal meaning, and supplied termination reason. An open-ended condition can remain pending when a run ends; an explicitly bounded evaluation concerns its named recorded observations. The test oracle supplies the outcome and the adapter records it. See [temporal assessments](https://github.com/ferpasri/testar-evidence-specs/blob/main/docs/check-evaluations.md#conditions-evaluated-over-time).
 
 `ExpectedValue.unspecified()` omits an expectation. `ExpectedValue.of(null)` records an explicit JSON null. An actual reading can contain a value, established absence, or unknown information; omitting the reading means none was supplied. Optional rule versions and parameter maps retain whether they were supplied.
 
