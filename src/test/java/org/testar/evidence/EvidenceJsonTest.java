@@ -28,11 +28,11 @@ class EvidenceJsonTest {
     @Test
     void omittedExpectationAndExplicitNullExpectationSurviveSerialization() {
         CheckResult original = TestData.check(new CheckTarget.Run());
-        EventEnvelope unspecified = new EventEnvelope("omitted", new Event.Checked(original));
+        EvidenceEvent unspecified = new EvidenceEvent("omitted", new Event.Checked(original));
         assertFalse(EvidenceJson.parse(EvidenceJson.writeEvent(unspecified)).path("event").path("data").has("expected"));
         CheckResult expectedNull = new CheckResult(original.run(), original.name(), original.rule(), original.target(),
             original.status(), ExpectedValue.of(null), new CheckReading.Value(EvidenceJson.parse("null")), original.details());
-        EventEnvelope supplied = new EventEnvelope("supplied", new Event.Checked(expectedNull));
+        EvidenceEvent supplied = new EvidenceEvent("supplied", new Event.Checked(expectedNull));
         assertTrue(EvidenceJson.parse(EvidenceJson.writeEvent(supplied)).path("event").path("data").get("expected").isNull());
         assertEquals(supplied, EvidenceJson.readEvent(EvidenceJson.writeEvent(supplied)));
     }
@@ -41,7 +41,7 @@ class EvidenceJsonTest {
     void unsignedPropertyIntegersRetainTheirExactValue() {
         BigInteger integer = new BigInteger("18446744073709551615");
         Properties properties = new Properties(EvidenceJson.parse("{\"fingerprint\":18446744073709551615}"));
-        EventEnvelope event = new EventEnvelope("large", new Event.RunStarted(new Run("run", "sample", "session", properties)));
+        EvidenceEvent event = new EvidenceEvent("large", new Event.RunStarted(new Run("run", "sample", "session", properties)));
         Event.RunStarted decoded = (Event.RunStarted) EvidenceJson.readEvent(EvidenceJson.writeEvent(event)).event();
         assertEquals(integer, decoded.data().properties().get("fingerprint").bigIntegerValue());
     }
@@ -49,7 +49,7 @@ class EvidenceJsonTest {
     @Test
     void omittedCandidateScopeIsUnknownAndAnExplicitNullScopeIsRejected() {
         ObjectNode event = (ObjectNode) EvidenceJson.parse(EvidenceJson.writeEvent(
-            new EventEnvelope("observe", new Event.Observed(TestData.observation("o1", 1)))));
+            new EvidenceEvent("observe", new Event.Observed(TestData.observation("o1", 1)))));
         ObjectNode data = (ObjectNode) event.path("event").path("data");
         data.remove("candidate_scope");
         Event.Observed decoded = (Event.Observed) EvidenceJson.readEvent(EvidenceJson.write(event)).event();
@@ -62,7 +62,7 @@ class EvidenceJsonTest {
     @ValueSource(strings = {"{}", "{\"kind\":\"value\"}", "null", "{\"kind\":\"absent\",\"value\":null}"})
     void malformedReadingsAreRejected(String reading) {
         ObjectNode event = (ObjectNode) EvidenceJson.parse(EvidenceJson.writeEvent(
-            new EventEnvelope("check", new Event.Checked(TestData.check(new CheckTarget.Run())))));
+            new EvidenceEvent("check", new Event.Checked(TestData.check(new CheckTarget.Run())))));
         ((ObjectNode) event.path("event").path("data")).set("actual", EvidenceJson.parse(reading));
         assertThrows(ModelException.class, () -> EvidenceJson.readEvent(EvidenceJson.write(event)));
     }
@@ -76,7 +76,7 @@ class EvidenceJsonTest {
     @Test
     void unknownStructuralFieldsAreRejected() {
         ObjectNode event = (ObjectNode) EvidenceJson.parse(EvidenceJson.writeEvent(
-            new EventEnvelope("observe", new Event.Observed(TestData.observation("o1", 1)))));
+            new EvidenceEvent("observe", new Event.Observed(TestData.observation("o1", 1)))));
         ((ObjectNode) event.path("event").path("data")).put("unexpected", true);
         assertThrows(ModelException.class, () -> EvidenceJson.readEvent(EvidenceJson.write(event)));
         assertThrows(ModelException.class, () -> EvidenceJson.readManifest("{\"schema_version\":2,\"model\":\"sample\",\"unexpected\":true}"));

@@ -25,7 +25,7 @@ class JsonlStoreTest {
         }
         try (JsonlStore store = JsonlStore.open(root)) {
             assertEquals(4, store.model().eventCount());
-            store.record(new EventEnvelope("finish", new Event.RunFinished("run", "done")));
+            store.record(new EvidenceEvent("finish", new Event.RunFinished("run", "done")));
         }
         StateModel read = EvidenceReader.read(root);
         assertEquals(5, read.eventCount());
@@ -36,11 +36,11 @@ class JsonlStoreTest {
     void retriesAndInvalidEventsLeaveTheLogUnchanged() throws IOException {
         Path root = temporary.resolve("model");
         try (JsonlStore store = JsonlStore.create(root, new Manifest("model"))) {
-            EventEnvelope event = start();
+            EvidenceEvent event = start();
             assertTrue(store.record(event));
             byte[] before = Files.readAllBytes(root.resolve("evidence.jsonl"));
             assertFalse(store.record(event));
-            assertThrows(ModelException.class, () -> store.record(new EventEnvelope("invalid",
+            assertThrows(ModelException.class, () -> store.record(new EvidenceEvent("invalid",
                 new Event.ActionSelected(TestData.execution("execution", "missing")))));
             assertArrayEquals(before, Files.readAllBytes(root.resolve("evidence.jsonl")));
             assertEquals(1, store.model().eventCount());
@@ -71,7 +71,7 @@ class JsonlStoreTest {
             assertArrayEquals(png, store.readArtifact(image));
             seed(store);
             Observation next = TestData.observation("o2", 2);
-            store.record(new EventEnvelope("image-observed", new Event.Observed(new Observation(next.id(), next.run(),
+            store.record(new EvidenceEvent("image-observed", new Event.Observed(new Observation(next.id(), next.run(),
                 next.sequence(), next.timestampMicros(), next.state(), next.candidates(), next.candidateScope(), List.of(image)))));
         }
         Path moved = temporary.resolve("moved");
@@ -97,7 +97,7 @@ class JsonlStoreTest {
             ArtifactReference missing = new ArtifactReference("image", "artifacts/missing.png", "image/png", "a".repeat(64), null, null);
             Observation withImage = new Observation(next.id(), next.run(), next.sequence(), next.timestampMicros(), next.state(),
                 next.candidates(), next.candidateScope(), List.of(missing));
-            assertThrows(IOException.class, () -> store.record(new EventEnvelope("missing", new Event.Observed(withImage))));
+            assertThrows(IOException.class, () -> store.record(new EvidenceEvent("missing", new Event.Observed(withImage))));
             assertArrayEquals(before, Files.readAllBytes(root.resolve("evidence.jsonl")));
             assertEquals(1, store.model().observations().size());
         }
@@ -140,21 +140,21 @@ class JsonlStoreTest {
         Path root = temporary.resolve("model");
         try (JsonlStore store = JsonlStore.create(root, new Manifest("model"))) {
             store.record(start());
-            store.model().apply(new EventEnvelope("finish-copy", new Event.RunFinished("run", "done")));
+            store.model().apply(new EvidenceEvent("finish-copy", new Event.RunFinished("run", "done")));
             assertFalse(store.model().run("run").orElseThrow().finished());
             assertEquals(1, store.model().eventCount());
         }
     }
 
-    private static EventEnvelope start() {
-        return new EventEnvelope("start", new Event.RunStarted(new Run("run", "sample", "session", Properties.empty())));
+    private static EvidenceEvent start() {
+        return new EvidenceEvent("start", new Event.RunStarted(new Run("run", "sample", "session", Properties.empty())));
     }
 
     private static void seed(JsonlStore store) throws IOException {
         store.record(start());
-        store.record(new EventEnvelope("activate", new Event.ActionDefined(new ActionDefinition("activate", "activate", Properties.empty()))));
-        store.record(new EventEnvelope("key", new Event.ActionDefined(new ActionDefinition("key", "key", Properties.empty()))));
-        store.record(new EventEnvelope("observed", new Event.Observed(TestData.observation("o1", 1))));
+        store.record(new EvidenceEvent("activate", new Event.ActionDefined(new ActionDefinition("activate", "activate", Properties.empty()))));
+        store.record(new EvidenceEvent("key", new Event.ActionDefined(new ActionDefinition("key", "key", Properties.empty()))));
+        store.record(new EvidenceEvent("observed", new Event.Observed(TestData.observation("o1", 1))));
     }
 
     private static byte[] png() throws IOException {

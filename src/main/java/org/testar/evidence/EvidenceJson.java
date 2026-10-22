@@ -87,7 +87,7 @@ public final class EvidenceJson {
         return write(tree(manifest));
     }
 
-    public static EventEnvelope readEvent(String json) {
+    public static EvidenceEvent readEvent(String json) {
         JsonNode root = parse(json);
         fields(root, Set.of("schema_version", "id", "event"));
         JsonNode wrapped = root.get("event");
@@ -113,7 +113,7 @@ public final class EvidenceJson {
         JsonNode version = root.get("schema_version");
         Validation.require(version != null && version.isIntegralNumber() && version.canConvertToInt(),
             "invalid_record", "Schema version must be an integer");
-        return new EventEnvelope(version.intValue(), requiredText(root, "id"), event);
+        return new EvidenceEvent(version.intValue(), requiredText(root, "id"), event);
     }
 
     private static Observation readObservation(JsonNode data) {
@@ -146,7 +146,7 @@ public final class EvidenceJson {
             expected, actual, details);
     }
 
-    public static String writeEvent(EventEnvelope envelope) {
+    public static String writeEvent(EvidenceEvent envelope) {
         ObjectNode root = object();
         root.put("schema_version", envelope.schemaVersion());
         root.put("id", envelope.id());

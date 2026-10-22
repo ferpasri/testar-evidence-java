@@ -53,7 +53,7 @@ public final class EvidenceReader {
                 if (next == '\n') {
                     String json = decode(line.toByteArray());
                     try {
-                        EventEnvelope event = EvidenceJson.readEvent(json);
+                        EvidenceEvent event = EvidenceJson.readEvent(json);
                         model.validate(event);
                         verifyArtifacts(root, event);
                         model.apply(event);
@@ -78,7 +78,7 @@ public final class EvidenceReader {
         return completed;
     }
 
-    static void verifyArtifacts(Path root, EventEnvelope event) throws IOException {
+    static void verifyArtifacts(Path root, EvidenceEvent event) throws IOException {
         if (event.event() instanceof Event.Observed observed) {
             for (ArtifactReference artifact : observed.data().artifacts()) {
                 Artifacts.verify(root, artifact);

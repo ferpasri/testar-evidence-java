@@ -1,10 +1,10 @@
 # TESTAR evidence for Java
 
-A standalone Java library for recording test execution evidence in the shared [TESTAR evidence format](https://github.com/ferpasri/testar-evidence-specs).
+A standalone Java library for validating and saving portable test execution evidence in the shared [TESTAR evidence format](https://github.com/ferpasri/testar-evidence-specs).
 
-Tool adapters supply runs, observed states, widgets, properties, discovered actions, executions, screenshots, and test oracle results. The library validates those records, saves portable model directories, and exposes queries over the execution history.
+Tool adapters supply runs, observed states, widgets, properties, discovered actions, executions, screenshots, and test oracle results. The library checks that the records and their references are valid, then saves them as portable evidence files.
 
-Every visit remains a separate observation. Completed executions connect their source and result observations in the recorded direction. Discovered candidates remain available even when never selected. Consumers can use the saved evidence to display traces or build derived models.
+Every visit remains a separate observation. Each completed action connects the observation before the action to its resulting observation, forming a state-action-state execution trace. Discovered candidates remain available even when never selected. Consumers can use the saved evidence to display traces or build derived models.
 
 Captured properties and oracle evaluations are separate evidence. Check results identify what was evaluated, the rule, its outcome, and any reported reading.
 
@@ -79,7 +79,13 @@ Public API classes are in `org.testar.evidence`.
 mvn test-compile exec:java "-Dexec.mainClass=org.testar.evidence.examples.LocalModel" "-Dexec.classpathScope=test"
 ```
 
-Open the generated `target/example-model/` directory in the state model dashboard. Running the example again reuses the same event IDs, preserving the existing records without duplication.
+Each run creates a new directory under `target/traces/`, such as `demo_submit-form_trace-2026-10-22_15-30-12-123/`. A name collision adds a numeric suffix. Model and run identities are distinct on each execution, so earlier evidence is preserved. Load the complete generated directory in the dashboard.
+
+To supply the parent directory, SUT label, and test objective label, add `"-Dexec.args=target/traces demo submit-form"`. Labels are stored in run properties as supplied; their filename versions are sanitized and limited to 32 characters each.
+
+## Reading and inspecting saved traces
+
+The library remembers earlier records while writing so it can check new ones. For example, a selected action must refer to an existing observation and one of its candidates. `EvidenceReader.read(directory)` reads a saved trace without changing it. `JsonlStore.open(directory)` reads existing records before continuing a recording. `observationsForRun`, `executionsForRun`, and `outgoing` provide simple lookups over those records. Reading and inspection support recording; consumers decide how to group visits into derived models.
 
 ## Shared conformance data
 

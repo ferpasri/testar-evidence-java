@@ -17,7 +17,7 @@ public final class StateModel {
     private final Map<String, ConcreteState> snapshots = new TreeMap<>();
     private final Map<String, ActionDefinition> actions = new TreeMap<>();
     private final Map<String, ExecutionRecord> executions = new LinkedHashMap<>();
-    private final Map<String, EventEnvelope> events = new LinkedHashMap<>();
+    private final Map<String, EvidenceEvent> events = new LinkedHashMap<>();
     private final List<CheckResult> checks = new ArrayList<>();
     private final Map<String, Observation> latest = new HashMap<>();
     private final Map<String, String> pending = new HashMap<>();
@@ -26,9 +26,9 @@ public final class StateModel {
         this.manifest = Validation.present(manifest, "Manifest");
     }
 
-    public boolean validate(EventEnvelope envelope) {
+    public boolean validate(EvidenceEvent envelope) {
         Validation.present(envelope, "Event");
-        EventEnvelope previous = events.get(envelope.id());
+        EvidenceEvent previous = events.get(envelope.id());
         if (previous != null) {
             Validation.same(previous, envelope, "Conflicting event: " + envelope.id());
             return false;
@@ -57,7 +57,7 @@ public final class StateModel {
         return true;
     }
 
-    public boolean apply(EventEnvelope envelope) {
+    public boolean apply(EvidenceEvent envelope) {
         if (!validate(envelope)) {
             return false;
         }

@@ -9,10 +9,10 @@ final class TestData {
 
     static StateModel model() {
         StateModel model = new StateModel(new Manifest("sample:model"));
-        model.apply(new EventEnvelope("start", new Event.RunStarted(new Run("run", "sample", "session", Properties.empty()))));
-        model.apply(new EventEnvelope("define-activate", new Event.ActionDefined(new ActionDefinition("activate", "activate", Properties.empty()))));
-        model.apply(new EventEnvelope("define-key", new Event.ActionDefined(new ActionDefinition("key", "key", Properties.empty()))));
-        model.apply(new EventEnvelope("observe-1", new Event.Observed(observation("o1", 1))));
+        model.apply(new EvidenceEvent("start", new Event.RunStarted(new Run("run", "sample", "session", Properties.empty()))));
+        model.apply(new EvidenceEvent("define-activate", new Event.ActionDefined(new ActionDefinition("activate", "activate", Properties.empty()))));
+        model.apply(new EvidenceEvent("define-key", new Event.ActionDefined(new ActionDefinition("key", "key", Properties.empty()))));
+        model.apply(new EvidenceEvent("observe-1", new Event.Observed(observation("o1", 1))));
         return model;
     }
 
@@ -30,12 +30,12 @@ final class TestData {
     }
 
     static void select(StateModel model) {
-        model.apply(new EventEnvelope("select", new Event.ActionSelected(execution("execution", "o1"))));
+        model.apply(new EvidenceEvent("select", new Event.ActionSelected(execution("execution", "o1"))));
     }
 
     static void submit(StateModel model) {
         select(model);
-        model.apply(new EventEnvelope("submit", new Event.ActionSubmitted("execution", true, null)));
+        model.apply(new EvidenceEvent("submit", new Event.ActionSubmitted("execution", true, null)));
     }
 
     static CheckResult check(CheckTarget target) {

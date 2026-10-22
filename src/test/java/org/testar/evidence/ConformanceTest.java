@@ -38,7 +38,7 @@ class ConformanceTest {
             assertEquals(expected.path("error").path("code").asText(), error.code());
             assertEquals(expected.path("error").path("field").asText(), error.field());
             StateModel prefix = new StateModel(EvidenceJson.readManifest(Files.readString(source.resolve("manifest.json"))));
-            for (EventEnvelope event : events(source)) {
+            for (EvidenceEvent event : events(source)) {
                 JsonNode previous = summary(prefix);
                 try {
                     prefix.apply(event);
@@ -58,10 +58,10 @@ class ConformanceTest {
         Path destination = temporary.resolve("produce-" + source.getFileName());
         Manifest manifest = EvidenceJson.readManifest(Files.readString(source.resolve("manifest.json")));
         JsonNode failure = null;
-        List<EventEnvelope> accepted = new ArrayList<>();
+        List<EvidenceEvent> accepted = new ArrayList<>();
         StateModel result;
         try (JsonlStore store = JsonlStore.create(destination, manifest)) {
-            for (EventEnvelope event : events(source)) {
+            for (EvidenceEvent event : events(source)) {
                 if (event.event() instanceof Event.Observed observed) {
                     for (ArtifactReference artifact : observed.data().artifacts()) {
                         byte[] bytes = Files.readAllBytes(source.resolve(artifact.path()));
@@ -98,7 +98,7 @@ class ConformanceTest {
         }
         assertEquals(EvidenceJson.parse(Files.readString(source.resolve("manifest.json"))),
             EvidenceJson.parse(Files.readString(destination.resolve("manifest.json"))));
-        List<EventEnvelope> produced = events(destination);
+        List<EvidenceEvent> produced = events(destination);
         assertEquals(accepted, produced, "The complete accepted event history must survive storage");
         assertHistory(result, produced);
         for (Observation observation : result.observations()) {
@@ -109,19 +109,19 @@ class ConformanceTest {
         }
     }
 
-    private static List<EventEnvelope> events(Path source) throws IOException {
+    private static List<EvidenceEvent> events(Path source) throws IOException {
         return Files.readAllLines(source.resolve("evidence.jsonl")).stream().map(line -> {
-            EventEnvelope event = EvidenceJson.readEvent(line);
+            EvidenceEvent event = EvidenceJson.readEvent(line);
             assertEquals(EvidenceJson.parse(line), EvidenceJson.parse(EvidenceJson.writeEvent(event)),
                 "Every field must survive serialization");
             return event;
         }).toList();
     }
 
-    private static void assertHistory(StateModel model, List<EventEnvelope> events) {
+    private static void assertHistory(StateModel model, List<EvidenceEvent> events) {
         assertRecords(model, events);
         List<CheckResult> checks = events.stream()
-            .map(EventEnvelope::event)
+            .map(EvidenceEvent::event)
             .filter(Event.Checked.class::isInstance)
             .map(Event.Checked.class::cast)
             .map(Event.Checked::data)
@@ -129,8 +129,8 @@ class ConformanceTest {
         assertEquals(checks, model.checks(), "Each reported result remains separate and in recording order");
     }
 
-    private static void assertRecords(StateModel model, List<EventEnvelope> events) {
-        for (EventEnvelope envelope : events) {
+    private static void assertRecords(StateModel model, List<EvidenceEvent> events) {
+        for (EvidenceEvent envelope : events) {
             Event event = envelope.event();
             if (event instanceof Event.RunStarted value) {
                 assertEquals(value.data(), model.run(value.data().id()).orElseThrow().run());

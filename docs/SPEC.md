@@ -1,6 +1,6 @@
-# Java state model specification
+# Java evidence library specification
 
-The library records what a testing tool observed, which actions it discovered, what it executed, and the outcomes reported by its test oracles. An adapter translates tool data into these generic records.
+The library validates and saves what a testing tool observed, which actions it discovered, what it executed, and the outcomes reported by its test oracles. An adapter translates tool data into these generic records.
 
 The [shared model semantics](https://github.com/ferpasri/testar-evidence-specs/blob/main/docs/model-semantics.md) define the evidence meaning. This document describes the Java API in `org.testar.evidence` and its implemented behavior.
 
@@ -49,7 +49,7 @@ Consumers can identify candidates with no recorded selection from that observati
 
 ## Events and execution order
 
-Each `EventEnvelope` identifies one versioned event with a fixed event ID and payload.
+Each `EvidenceEvent` describes one reported event together with its stable identity and format version.
 
 | Event | Recorded behavior |
 | --- | --- |
@@ -66,7 +66,7 @@ A run starts before its observations, and action definitions precede their candi
 
 `StateModel.validate` checks an event without applying it. `StateModel.apply` validates before updating the model. An identical event retry returns `false`. Different content using an existing event ID raises a conflict.
 
-`ExecutionRecord` exposes the selected action and its status: selected, submitted, rejected, observed, or incomplete. A completed execution produces an `ExecutionLink` from its source observation to its result. Submission acceptance records whether the testing tool's runner, driver, or execution wrapper accepted the action. A rejected submission retains the reported error and has no completed result link. An executed click followed by an application message such as "Incorrect password" has a resulting observation containing that response. Test oracle results describe evaluated conditions separately.
+`ExecutionRecord` exposes the selected action and its status: selected, submitted, rejected, observed, or incomplete. A completed action connects the observation before it to its resulting observation, forming a state-action-state execution trace represented by an `ExecutionLink`. Submission acceptance records whether the testing tool's runner, driver, or execution wrapper accepted the action. A rejected submission retains the reported error and has no completed result link. An executed click followed by an application message such as "Incorrect password" has a resulting observation containing that response. Test oracle results describe evaluated conditions separately.
 
 ## Test oracle results
 
@@ -82,13 +82,17 @@ Each report remains a separate result, including repeated reports for the same r
 
 An invalid target raises `ModelException` with code `invalid_check_target`, identifying the affected field, such as `target.widget`. Rejection preserves the model and stored log.
 
-## Queries and data access
+## Reading and inspecting recorded evidence
 
-Queries expose runs, visits, snapshots, actions, candidates, executions, links, and check results. Visits within a run are ordered by sequence; executions and links follow selection order; evaluations follow recording order. General run, observation, action, and snapshot lists are sorted by ID.
+The library keeps track of earlier records so it can validate new events. Reading saved events builds those same records and links in memory for inspection or continued recording. Simple lookup methods return runs, visits, snapshots, actions, candidates, executions, links, and check results. Visits within a run are ordered by sequence; executions and links follow selection order; evaluations follow recording order. General run, observation, action, and snapshot lists are sorted by ID.
 
 `incoming` and `outgoing` find completed links for a visit. `observationsForSnapshot` finds the visits referencing a snapshot. `observationsForRun` returns a run's ordered visits.
 
 Records are immutable. Lists are copied; properties and supplied JSON values are copied on entry and access. `StateModel` is intended for one caller at a time; `snapshot()` returns an independent model. Sequence numbers and timestamps use `BigInteger` for the full unsigned 64-bit range, with convenience constructors accepting nonnegative `long` values. JSON integer properties retain their precision.
+
+## Example trace directories
+
+The example takes a parent directory followed by optional SUT and test objective labels. It reserves a new directory named `<sut>_<objective>_trace-<local timestamp>`, including milliseconds. Labels are made safe for filenames and limited to 32 characters each. A collision adds `-2`, `-3`, and so on. Each run also receives distinct model and run identities. These labels describe demonstration records; they do not launch an application or choose a test script. The storage API continues accepting an explicit directory.
 
 ## Storage
 

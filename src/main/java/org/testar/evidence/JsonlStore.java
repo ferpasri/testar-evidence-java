@@ -65,7 +65,7 @@ public final class JsonlStore implements AutoCloseable {
         }
     }
 
-    public synchronized boolean record(EventEnvelope event) throws IOException {
+    public synchronized boolean record(EvidenceEvent event) throws IOException {
         requireWritable();
         if (!model.validate(event)) {
             return false;
