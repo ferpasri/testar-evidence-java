@@ -1,18 +1,25 @@
 package org.testar.evidence;
 
 import java.util.Locale;
+import java.math.BigInteger;
 
-public record ArtifactReference(String id, String path, String mediaType, String sha256, Long width, Long height) {
+public record ArtifactReference(String id, String path, String mediaType, String sha256, BigInteger width, BigInteger height) {
     public ArtifactReference {
         Validation.text(id, "Artifact ID");
         Validation.text(mediaType, "Media type");
         validatePath(path);
-        Validation.require(sha256 != null && sha256.matches("[0-9a-fA-F]{64}"),
+        Validation.require(sha256 != null && sha256.matches("[0-9a-f]{64}"),
             "invalid_record", "Artifact SHA-256 must have 64 hexadecimal characters");
-        Validation.require(width == null || width > 0 && width <= 0xffff_ffffL,
-            "invalid_record", "Width must be a positive unsigned 32-bit integer");
-        Validation.require(height == null || height > 0 && height <= 0xffff_ffffL,
-            "invalid_record", "Height must be a positive unsigned 32-bit integer");
+        if (width != null) {
+            Validation.unsigned(width, "Width");
+        }
+        if (height != null) {
+            Validation.unsigned(height, "Height");
+        }
+    }
+
+    public ArtifactReference(String id, String path, String mediaType, String sha256, long width, long height) {
+        this(id, path, mediaType, sha256, BigInteger.valueOf(width), BigInteger.valueOf(height));
     }
 
     static void validatePath(String path) {

@@ -6,9 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public record ConcreteState(String id, Properties properties, List<Widget> widgets, CaptureScope capture) {
-    public ConcreteState {
-        Validation.text(id, "Snapshot ID");
+public record RecordedState(String id, Properties properties, List<Widget> widgets, CaptureScope capture) {
+    public RecordedState {
+        Validation.text(id, "Recorded-state ID");
         Validation.present(properties, "Properties");
         Validation.present(capture, "Capture scope");
         widgets = List.copyOf(Validation.present(widgets, "Widgets"));

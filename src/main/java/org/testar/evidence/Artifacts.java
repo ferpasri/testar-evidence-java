@@ -22,7 +22,7 @@ final class Artifacts {
                 throw new IOException("Evidence paths cannot contain symbolic links: " + relative);
             }
             if (Files.exists(current, LinkOption.NOFOLLOW_LINKS) && !current.toRealPath().startsWith(root)) {
-                throw new IOException("Evidence path leaves its model directory: " + relative);
+                throw new IOException("Evidence path leaves its evidence directory: " + relative);
             }
         }
         return current;

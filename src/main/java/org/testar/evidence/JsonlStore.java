@@ -1,6 +1,7 @@
 package org.testar.evidence;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
@@ -15,15 +16,15 @@ public final class JsonlStore implements AutoCloseable {
     private final Path root;
     private final WriterLock writerLock;
     private final FileChannel log;
-    private final StateModel model;
+    private final ReconstructedEvidence evidence;
     private boolean closed;
     private boolean failed;
 
-    private JsonlStore(Path root, WriterLock writerLock, FileChannel log, StateModel model) {
+    private JsonlStore(Path root, WriterLock writerLock, FileChannel log, ReconstructedEvidence evidence) {
         this.root = root;
         this.writerLock = writerLock;
         this.log = log;
-        this.model = model;
+        this.evidence = evidence;
     }
 
     public static JsonlStore create(Path directory, Manifest manifest) throws IOException {
@@ -34,7 +35,7 @@ public final class JsonlStore implements AutoCloseable {
         try {
             if (Files.exists(root.resolve("manifest.json"), LinkOption.NOFOLLOW_LINKS)
                 || Files.exists(root.resolve("evidence.jsonl"), LinkOption.NOFOLLOW_LINKS)) {
-                throw new IOException("Model already exists; open it to continue recording");
+                throw new IOException("Evidence already exists; open it to continue recording");
             }
             byte[] bytes = (EvidenceJson.writeManifest(manifest) + "\n").getBytes(StandardCharsets.UTF_8);
             try (FileChannel metadata = FileChannel.open(root.resolve("manifest.json"),
@@ -44,7 +45,7 @@ public final class JsonlStore implements AutoCloseable {
             }
             FileChannel log = FileChannel.open(root.resolve("evidence.jsonl"),
                 StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            return new JsonlStore(root, lock, log, new StateModel(manifest));
+            return new JsonlStore(root, lock, log, new ReconstructedEvidence(manifest));
         } catch (IOException | RuntimeException error) {
             lock.close();
             throw error;
@@ -55,10 +56,10 @@ public final class JsonlStore implements AutoCloseable {
         Path root = directory.toRealPath();
         WriterLock lock = WriterLock.acquire(root);
         try {
-            StateModel model = EvidenceReader.read(root);
+            ReconstructedEvidence evidence = EvidenceReader.read(root);
             FileChannel log = FileChannel.open(EvidenceReader.regular(root, "evidence.jsonl"),
                 StandardOpenOption.WRITE, StandardOpenOption.APPEND, LinkOption.NOFOLLOW_LINKS);
-            return new JsonlStore(root, lock, log, model);
+            return new JsonlStore(root, lock, log, evidence);
         } catch (IOException | RuntimeException error) {
             lock.close();
             throw error;
@@ -67,7 +68,7 @@ public final class JsonlStore implements AutoCloseable {
 
     public synchronized boolean record(EvidenceEvent event) throws IOException {
         requireWritable();
-        if (!model.validate(event)) {
+        if (!evidence.validate(event)) {
             return false;
         }
         EvidenceReader.verifyArtifacts(root, event);
@@ -82,11 +83,15 @@ public final class JsonlStore implements AutoCloseable {
             failed = true;
             throw error;
         }
-        model.apply(event);
+        evidence.apply(event);
         return true;
     }
 
-    public synchronized ArtifactReference putArtifact(byte[] bytes, String mediaType, Long width, Long height) throws IOException {
+    public synchronized ArtifactReference putArtifact(byte[] bytes, String mediaType, long width, long height) throws IOException {
+        return putArtifact(bytes, mediaType, BigInteger.valueOf(width), BigInteger.valueOf(height));
+    }
+
+    public synchronized ArtifactReference putArtifact(byte[] bytes, String mediaType, BigInteger width, BigInteger height) throws IOException {
         requireWritable();
         Validation.present(bytes, "Artifact bytes");
         Validation.text(mediaType, "Media type");
@@ -115,16 +120,16 @@ public final class JsonlStore implements AutoCloseable {
         return Files.readAllBytes(Artifacts.resolve(root, reference.path()));
     }
 
-    public synchronized StateModel model() {
+    public synchronized ReconstructedEvidence evidence() {
         requireOpen();
-        return model.snapshot();
+        return evidence.snapshot();
     }
 
     public static long recoverTail(Path directory) throws IOException {
         Path root = directory.toRealPath();
         try (WriterLock ignored = WriterLock.acquire(root)) {
-            StateModel model = new StateModel(EvidenceReader.manifest(root));
-            long completed = EvidenceReader.replay(root, model, true);
+            ReconstructedEvidence evidence = new ReconstructedEvidence(EvidenceReader.manifest(root));
+            long completed = EvidenceReader.replay(root, evidence, true);
             Path path = EvidenceReader.regular(root, "evidence.jsonl");
             long removed = Files.size(path) - completed;
             if (removed > 0) {
@@ -177,13 +182,13 @@ public final class JsonlStore implements AutoCloseable {
             try {
                 FileLock lock = channel.tryLock();
                 if (lock == null) {
-                    throw new IOException("Another writer has this model open");
+                    throw new IOException("Another writer has this evidence open");
                 }
                 return new WriterLock(channel, lock);
             } catch (IOException | RuntimeException error) {
                 channel.close();
                 if (error instanceof OverlappingFileLockException) {
-                    throw new IOException("Another writer has this model open", error);
+                    throw new IOException("Another writer has this evidence open", error);
                 }
                 throw error;
             }

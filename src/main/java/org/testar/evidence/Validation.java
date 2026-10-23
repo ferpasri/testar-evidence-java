@@ -17,7 +17,7 @@ final class Validation {
 
     static <T> T present(T value, String field) {
         if (value == null) {
-            throw new ModelException("invalid_record", field + " is required");
+            throw new EvidenceException("invalid_record", field + " is required");
         }
         return value;
     }
@@ -30,7 +30,7 @@ final class Validation {
 
     static void require(boolean condition, String code, String message) {
         if (!condition) {
-            throw new ModelException(code, message);
+            throw new EvidenceException(code, message);
         }
     }
 

@@ -1,14 +1,14 @@
 package org.testar.evidence;
 
-public record Manifest(int schemaVersion, String model) {
-    public static final int SCHEMA_VERSION = 2;
+public record Manifest(int schemaVersion, String evidenceId) {
+
+    public static final int SCHEMA_VERSION = 3;
 
     public Manifest {
         Validation.require(schemaVersion == SCHEMA_VERSION, "invalid_record", "Unsupported schema version: " + schemaVersion);
-        Validation.text(model, "Model ID");
+        Validation.text(evidenceId, "Evidence ID");
     }
-
-    public Manifest(String model) {
-        this(SCHEMA_VERSION, model);
+    public Manifest(String evidenceId) {
+        this(SCHEMA_VERSION, evidenceId);
     }
 }

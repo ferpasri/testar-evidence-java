@@ -1,54 +1,66 @@
 package org.testar.evidence;
 
 public sealed interface Event {
-    record RunStarted(Run data) implements Event {
-        public RunStarted {
-            Validation.present(data, "Run");
+    record TestRunStarted(TestRun data) implements Event {
+        public TestRunStarted {
+            Validation.present(data, "TestRun");
         }
     }
 
-    record ActionDefined(ActionDefinition data) implements Event {
-        public ActionDefined {
-            Validation.present(data, "Action");
+    record TestSequenceStarted(TestSequence data) implements Event {
+        public TestSequenceStarted {
+            Validation.present(data, "TestSequence");
         }
     }
 
-    record Observed(Observation data) implements Event {
-        public Observed {
+    record ActionDescribed(ActionDescription data) implements Event {
+        public ActionDescribed {
+            Validation.present(data, "ActionDescription");
+        }
+    }
+
+    record ObservationRecorded(Observation data) implements Event {
+        public ObservationRecorded {
             Validation.present(data, "Observation");
         }
     }
 
-    record ActionSelected(Execution data) implements Event {
+    record ActionSelected(ActionExecution data) implements Event {
         public ActionSelected {
-            Validation.present(data, "Execution");
+            Validation.present(data, "ActionExecution");
         }
     }
 
-    record ActionSubmitted(String execution, boolean accepted, String error) implements Event {
-        public ActionSubmitted {
-            Validation.text(execution, "Execution ID");
-            Validation.require(!accepted || error == null, "invalid_record", "Accepted submission cannot carry an error");
+    record ActionExecutionReported(ActionExecutionResult data) implements Event {
+        public ActionExecutionReported {
+            Validation.present(data, "ActionExecutionResult");
         }
     }
 
-    record ActionResult(String execution, String observation) implements Event {
-        public ActionResult {
-            Validation.text(execution, "Execution ID");
-            Validation.text(observation, "Result observation");
+    record OracleResultRecorded(OracleResult data) implements Event {
+        public OracleResultRecorded {
+            Validation.present(data, "OracleResult");
         }
     }
 
-    record Checked(CheckResult data) implements Event {
-        public Checked {
-            Validation.present(data, "Check result");
+    record TransitionRecorded(String actionExecution, String resultingObservation) implements Event {
+        public TransitionRecorded {
+            Validation.text(actionExecution, "Action execution ID");
+            Validation.text(resultingObservation, "Resulting observation");
         }
     }
 
-    record RunFinished(String run, String reason) implements Event {
-        public RunFinished {
-            Validation.text(run, "Run ID");
-            Validation.text(reason, "Ending reason");
+    record TestSequenceFinished(String testSequence, String reason) implements Event {
+        public TestSequenceFinished {
+            Validation.text(testSequence, "Test sequence ID");
+            Validation.present(reason, "Ending reason");
+        }
+    }
+
+    record TestRunFinished(String testRun, String reason) implements Event {
+        public TestRunFinished {
+            Validation.text(testRun, "Test run ID");
+            Validation.present(reason, "Ending reason");
         }
     }
 }

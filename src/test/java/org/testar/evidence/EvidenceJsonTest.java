@@ -27,13 +27,13 @@ class EvidenceJsonTest {
 
     @Test
     void omittedExpectationAndExplicitNullExpectationSurviveSerialization() {
-        CheckResult original = TestData.check(new CheckTarget.Run());
-        EvidenceEvent unspecified = new EvidenceEvent("omitted", new Event.Checked(original));
-        assertFalse(EvidenceJson.parse(EvidenceJson.writeEvent(unspecified)).path("event").path("data").has("expected"));
-        CheckResult expectedNull = new CheckResult(original.run(), original.name(), original.rule(), original.target(),
-            original.status(), ExpectedValue.of(null), new CheckReading.Value(EvidenceJson.parse("null")), original.details());
-        EvidenceEvent supplied = new EvidenceEvent("supplied", new Event.Checked(expectedNull));
-        assertTrue(EvidenceJson.parse(EvidenceJson.writeEvent(supplied)).path("event").path("data").get("expected").isNull());
+        OracleResult original = TestData.check(new OracleTarget.TestSequence());
+        EvidenceEvent unspecified = new EvidenceEvent("omitted", new Event.OracleResultRecorded(original));
+        assertFalse(EvidenceJson.parse(EvidenceJson.writeEvent(unspecified)).path("event").path("data").has("expected_value"));
+        OracleResult expectedNull = new OracleResult(original.testRun(), original.testSequence(), original.name(), original.oracle(), original.oracleTarget(),
+            original.oracleStatus(), ExpectedValue.of(null), new ObservedValue.Value(EvidenceJson.parse("null")), original.oracleSeverity(), original.oracleDetails());
+        EvidenceEvent supplied = new EvidenceEvent("supplied", new Event.OracleResultRecorded(expectedNull));
+        assertTrue(EvidenceJson.parse(EvidenceJson.writeEvent(supplied)).path("event").path("data").get("expected_value").isNull());
         assertEquals(supplied, EvidenceJson.readEvent(EvidenceJson.writeEvent(supplied)));
     }
 
@@ -41,82 +41,81 @@ class EvidenceJsonTest {
     void unsignedPropertyIntegersRetainTheirExactValue() {
         BigInteger integer = new BigInteger("18446744073709551615");
         Properties properties = new Properties(EvidenceJson.parse("{\"fingerprint\":18446744073709551615}"));
-        EvidenceEvent event = new EvidenceEvent("large", new Event.RunStarted(new Run("run", "sample", "session", properties)));
-        Event.RunStarted decoded = (Event.RunStarted) EvidenceJson.readEvent(EvidenceJson.writeEvent(event)).event();
+        EvidenceEvent event = new EvidenceEvent("large", new Event.TestRunStarted(new TestRun("run", "sample", "session", properties)));
+        Event.TestRunStarted decoded = (Event.TestRunStarted) EvidenceJson.readEvent(EvidenceJson.writeEvent(event)).event();
         assertEquals(integer, decoded.data().properties().get("fingerprint").bigIntegerValue());
     }
 
     @Test
-    void omittedCandidateScopeIsUnknownAndAnExplicitNullScopeIsRejected() {
+    void availableActionScopeIsRequiredAndNullIsRejected() {
         ObjectNode event = (ObjectNode) EvidenceJson.parse(EvidenceJson.writeEvent(
-            new EvidenceEvent("observe", new Event.Observed(TestData.observation("o1", 1)))));
+            new EvidenceEvent("observe", new Event.ObservationRecorded(TestData.observation("o1", 1)))));
         ObjectNode data = (ObjectNode) event.path("event").path("data");
-        data.remove("candidate_scope");
-        Event.Observed decoded = (Event.Observed) EvidenceJson.readEvent(EvidenceJson.write(event)).event();
-        assertEquals(CandidateScope.UNKNOWN, decoded.data().candidateScope());
-        data.putNull("candidate_scope");
-        assertThrows(ModelException.class, () -> EvidenceJson.readEvent(EvidenceJson.write(event)));
+        data.remove("available_action_scope");
+        assertThrows(EvidenceException.class, () -> EvidenceJson.readEvent(EvidenceJson.write(event)));
+        data.putNull("available_action_scope");
+        assertThrows(EvidenceException.class, () -> EvidenceJson.readEvent(EvidenceJson.write(event)));
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"{}", "{\"kind\":\"value\"}", "null", "{\"kind\":\"absent\",\"value\":null}"})
+    @ValueSource(strings = {"{}", "{\"value_status\":\"value\"}", "null", "{\"value_status\":\"absent\",\"value\":null}"})
     void malformedReadingsAreRejected(String reading) {
         ObjectNode event = (ObjectNode) EvidenceJson.parse(EvidenceJson.writeEvent(
-            new EvidenceEvent("check", new Event.Checked(TestData.check(new CheckTarget.Run())))));
-        ((ObjectNode) event.path("event").path("data")).set("actual", EvidenceJson.parse(reading));
-        assertThrows(ModelException.class, () -> EvidenceJson.readEvent(EvidenceJson.write(event)));
+            new EvidenceEvent("check", new Event.OracleResultRecorded(TestData.check(new OracleTarget.TestSequence())))));
+        ((ObjectNode) event.path("event").path("data")).set("observed_value", EvidenceJson.parse(reading));
+        assertThrows(EvidenceException.class, () -> EvidenceJson.readEvent(EvidenceJson.write(event)));
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"{\"a\":1,\"a\":2}", "{} {}", "NaN", "", "{\"a\":Infinity}"})
     void malformedJsonIsRejected(String json) {
-        assertThrows(ModelException.class, () -> EvidenceJson.parse(json));
+        assertThrows(EvidenceException.class, () -> EvidenceJson.parse(json));
     }
 
     @Test
     void unknownStructuralFieldsAreRejected() {
         ObjectNode event = (ObjectNode) EvidenceJson.parse(EvidenceJson.writeEvent(
-            new EvidenceEvent("observe", new Event.Observed(TestData.observation("o1", 1)))));
+            new EvidenceEvent("observe", new Event.ObservationRecorded(TestData.observation("o1", 1)))));
         ((ObjectNode) event.path("event").path("data")).put("unexpected", true);
-        assertThrows(ModelException.class, () -> EvidenceJson.readEvent(EvidenceJson.write(event)));
-        assertThrows(ModelException.class, () -> EvidenceJson.readManifest("{\"schema_version\":2,\"model\":\"sample\",\"unexpected\":true}"));
+        assertThrows(EvidenceException.class, () -> EvidenceJson.readEvent(EvidenceJson.write(event)));
+        assertThrows(EvidenceException.class, () -> EvidenceJson.readManifest("{\"schema_version\":3,\"evidence_id\":\"sample\",\"unexpected\":true}"));
     }
 
     @Test
     void widgetsRequireAnAcyclicHierarchyWithinTheirSnapshot() {
         Properties empty = Properties.empty();
-        assertThrows(ModelException.class, () -> new ConcreteState("s", empty,
+        assertThrows(EvidenceException.class, () -> new RecordedState("s", empty,
             List.of(new Widget("one", "two", empty), new Widget("two", "one", empty)), CaptureScope.COMPLETE));
-        assertThrows(ModelException.class, () -> new ConcreteState("s", empty,
+        assertThrows(EvidenceException.class, () -> new RecordedState("s", empty,
             List.of(new Widget("one", "missing", empty)), CaptureScope.COMPLETE));
-        assertThrows(ModelException.class, () -> new ConcreteState("s", empty,
+        assertThrows(EvidenceException.class, () -> new RecordedState("s", empty,
             List.of(new Widget("one", null, empty), new Widget("one", null, empty)), CaptureScope.COMPLETE));
-        assertThrows(ModelException.class, () -> new ConcreteState("s", empty,
+        assertThrows(EvidenceException.class, () -> new RecordedState("s", empty,
             List.of(new Widget("one", null, empty)), CaptureScope.UNAVAILABLE));
     }
 
     @Test
     void observationCopiesItsListsAndRejectsDuplicateCandidates() {
         Observation original = TestData.observation("o1", 1);
-        List<ActionCandidate> candidates = new ArrayList<>(original.candidates());
-        Observation copied = new Observation(original.id(), original.run(), original.sequence(), original.timestampMicros(),
-            original.state(), candidates, original.candidateScope(), original.artifacts());
+        List<AvailableAction> candidates = new ArrayList<>(original.availableActions());
+        Observation copied = new Observation(original.id(), original.testSequence(), original.observationIndex(), original.timestampMicros(),
+            original.recordedState(), candidates, original.availableActionScope(), original.artifacts());
         candidates.clear();
-        assertEquals(3, copied.candidates().size());
-        assertThrows(ModelException.class, () -> new Observation("duplicate", "run", 1, 1, original.state(),
-            List.of(original.candidates().get(0), original.candidates().get(0)), CandidateScope.GENERATED, List.of()));
+        assertEquals(3, copied.availableActions().size());
+        assertThrows(EvidenceException.class, () -> new Observation("duplicate", "run", 1, 1, original.recordedState(),
+            List.of(original.availableActions().get(0), original.availableActions().get(0)), AvailableActionScope.GENERATED, List.of()));
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"../outside.png", "/outside.png", "a/../b.png", "C:/file.png", "a//b.png", "artifacts/CON.png"})
     void unsafeArtifactPathsAreRejected(String path) {
-        assertThrows(ModelException.class, () -> new ArtifactReference("image", path, "image/png", "a".repeat(64), null, null));
+        assertThrows(EvidenceException.class, () -> new ArtifactReference("image", path, "image/png", "a".repeat(64), null, null));
     }
 
     @Test
     void invalidTextAndAcceptedSubmissionErrorsAreRejected() {
-        assertThrows(ModelException.class, () -> new Manifest(" "));
-        assertThrows(ModelException.class, () -> new ActionDefinition("a\n", "click", Properties.empty()));
-        assertThrows(ModelException.class, () -> new Event.ActionSubmitted("execution", true, "error"));
+        assertThrows(EvidenceException.class, () -> new Manifest(" "));
+        assertThrows(EvidenceException.class, () -> new ActionDescription("a\n", "click", Properties.empty()));
+        assertThrows(EvidenceException.class, () -> new Event.ActionExecutionReported(new ActionExecutionResult("execution", ActionOutcome.RETURNED, "error")));
     }
 }

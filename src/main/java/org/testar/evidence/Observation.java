@@ -5,25 +5,25 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public record Observation(String id, String run, BigInteger sequence, BigInteger timestampMicros,
-                          ConcreteState state, List<ActionCandidate> candidates,
-                          CandidateScope candidateScope, List<ArtifactReference> artifacts) {
+public record Observation(String id, String testSequence, BigInteger observationIndex, BigInteger timestampMicros,
+                          RecordedState recordedState, List<AvailableAction> availableActions,
+                          AvailableActionScope availableActionScope, List<ArtifactReference> artifacts) {
     public Observation {
         Validation.text(id, "Observation ID");
-        Validation.text(run, "Run ID");
-        Validation.unsigned(sequence, "Sequence");
+        Validation.text(testSequence, "TestRun ID");
+        Validation.unsigned(observationIndex, "Sequence");
         Validation.unsigned(timestampMicros, "Timestamp");
-        Validation.present(state, "State");
-        candidates = List.copyOf(Validation.present(candidates, "Candidates"));
+        Validation.present(recordedState, "State");
+        availableActions = List.copyOf(Validation.present(availableActions, "Candidates"));
         artifacts = List.copyOf(Validation.present(artifacts, "Artifacts"));
-        candidateScope = candidateScope == null ? CandidateScope.UNKNOWN : candidateScope;
+        Validation.present(availableActionScope, "Available-action scope");
         Set<String> widgets = new HashSet<>();
-        state.widgets().forEach(widget -> widgets.add(widget.id()));
-        Set<ActionCandidate> uniqueCandidates = new HashSet<>();
-        for (ActionCandidate candidate : candidates) {
-            Validation.require(candidate.target() == null || widgets.contains(candidate.target()),
-                "unknown_reference", "Unknown candidate widget: " + candidate.target());
-            Validation.require(uniqueCandidates.add(candidate), "conflict", "Duplicate action candidate");
+        recordedState.widgets().forEach(widget -> widgets.add(widget.id()));
+        Set<AvailableAction> uniqueAvailableActions = new HashSet<>();
+        for (AvailableAction availableAction : availableActions) {
+            Validation.require(availableAction.targetWidget() == null || widgets.contains(availableAction.targetWidget()),
+                "unknown_reference", "Unknown available-action widget: " + availableAction.targetWidget());
+            Validation.require(uniqueAvailableActions.add(availableAction), "conflict", "Duplicate available action");
         }
         Set<String> artifactIds = new HashSet<>();
         for (ArtifactReference artifact : artifacts) {
@@ -31,9 +31,9 @@ public record Observation(String id, String run, BigInteger sequence, BigInteger
         }
     }
 
-    public Observation(String id, String run, long sequence, long timestampMicros, ConcreteState state,
-                       List<ActionCandidate> candidates, CandidateScope candidateScope, List<ArtifactReference> artifacts) {
-        this(id, run, BigInteger.valueOf(sequence), BigInteger.valueOf(timestampMicros),
-            state, candidates, candidateScope, artifacts);
+    public Observation(String id, String testSequence, long observationIndex, long timestampMicros, RecordedState recordedState,
+                       List<AvailableAction> availableActions, AvailableActionScope availableActionScope, List<ArtifactReference> artifacts) {
+        this(id, testSequence, BigInteger.valueOf(observationIndex), BigInteger.valueOf(timestampMicros),
+            recordedState, availableActions, availableActionScope, artifacts);
     }
 }

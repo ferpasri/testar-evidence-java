@@ -18,11 +18,11 @@ public final class EvidenceReader {
     private EvidenceReader() {
     }
 
-    public static StateModel read(Path directory) throws IOException {
+    public static ReconstructedEvidence read(Path directory) throws IOException {
         Path root = directory.toRealPath();
-        StateModel model = new StateModel(manifest(root));
-        replay(root, model, false);
-        return model;
+        ReconstructedEvidence evidence = new ReconstructedEvidence(manifest(root));
+        replay(root, evidence, false);
+        return evidence;
     }
 
     static Manifest manifest(Path root) throws IOException {
@@ -41,7 +41,7 @@ public final class EvidenceReader {
         return path;
     }
 
-    static long replay(Path root, StateModel model, boolean allowIncompleteTail) throws IOException {
+    static long replay(Path root, ReconstructedEvidence evidence, boolean allowIncompleteTail) throws IOException {
         long offset = 0;
         long completed = 0;
         int lineNumber = 1;
@@ -54,11 +54,11 @@ public final class EvidenceReader {
                     String json = decode(line.toByteArray());
                     try {
                         EvidenceEvent event = EvidenceJson.readEvent(json);
-                        model.validate(event);
+                        evidence.validate(event);
                         verifyArtifacts(root, event);
-                        model.apply(event);
-                    } catch (ModelException error) {
-                        throw new ModelException(error.code(), error.field(),
+                        evidence.apply(event);
+                    } catch (EvidenceException error) {
+                        throw new EvidenceException(error.code(), error.field(),
                             "evidence.jsonl line " + lineNumber + ": " + error.getMessage());
                     }
                     line.reset();
@@ -79,7 +79,7 @@ public final class EvidenceReader {
     }
 
     static void verifyArtifacts(Path root, EvidenceEvent event) throws IOException {
-        if (event.event() instanceof Event.Observed observed) {
+        if (event.event() instanceof Event.ObservationRecorded observed) {
             for (ArtifactReference artifact : observed.data().artifacts()) {
                 Artifacts.verify(root, artifact);
             }

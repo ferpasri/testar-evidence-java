@@ -1,134 +1,63 @@
 # Java evidence library specification
 
-The library validates and saves what a testing tool observed, which actions it discovered, what it executed, and the outcomes reported by its test oracles. An adapter translates tool data into these generic records.
+The library implements [schema 3](https://github.com/ferpasri/testar-evidence-specs/blob/v0.3.0/docs/evidence-format.md). Adapters report facts from their tools; validation checks records and references before storage. The shared [terminology](https://github.com/ferpasri/testar-evidence-specs/blob/v0.3.0/docs/terminology.md) defines their meaning. Public classes are in `org.testar.evidence`.
 
-The [shared model semantics](https://github.com/ferpasri/testar-evidence-specs/blob/main/docs/model-semantics.md) define the evidence meaning. This document describes the Java API in `org.testar.evidence` and its implemented behavior.
+## Components
 
-## Records and properties
-
-| Type | What it represents |
+| Type | Responsibility |
 | --- | --- |
-| `Run` | One testing session and its producer information. |
-| `Observation` | One visit, with its sequence position, timestamp, state, candidates, and artifact references. |
-| `ConcreteState` | Captured state properties and an ordered widget hierarchy. |
-| `Widget` | A captured interface element, its local ID, optional parent, and properties. |
-| `Properties` | Named JSON values, including nested data and explicit null values. |
-| `ActionDefinition` | An action's stable ID, kind, and descriptive properties. |
-| `ActionCandidate` | An action discovered at one observation, optionally bound to a widget. |
-| `Execution` | One selection, including its source, candidate binding, and actual parameters. |
-| `CheckResult` | The outcome and supporting information from one test oracle evaluation. |
-| `CheckRule` | The condition's ID, optional version, and optional parameters. |
-| `CheckTarget` | The run, visit, widget, property, execution, or sequence being evaluated. |
-| `CheckReading` | A reported JSON value, established absence, or unknown information. |
-| `ExpectedValue` | An omitted expectation or a supplied JSON value, including null. |
-| `ArtifactReference` | A local evidence file, its media type, SHA-256 hash, and optional dimensions. |
+| `TestRun` / `TestSequence` | Describe an invocation and its independent sequence histories. |
+| `Observation` / `RecordedState` / `Widget` | Preserve captured moments, state content, widget hierarchy, properties, and capture limits. |
+| `ActionDescription` / `AvailableAction` | Describe operations and reported choices, including choices never executed. |
+| `ActionExecution` / `ActionExecutionResult` / `RecordedTransition` | Preserve selection, parameters, the runner's outcome, and a resulting-observation connection. |
+| `Oracle` / `OracleResult` / `OracleTarget` | Identify checks and preserve their targets and outcomes. |
+| `ObservedValue` / `OracleSeverity` | Preserve reported values, established absence or uncertainty, and optional source-defined importance. |
+| `EvidenceEvent` / `Event` | Carry event identity/version and a typed event payload. |
+| `ReconstructedEvidence` | Retain recorded facts and relationships in memory for validation and inspection. |
+| `JsonlStore` / `EvidenceReader` | Write validated evidence and read it back. |
 
-Every visit has its own observation ID. Identical snapshot content can share a snapshot ID while the visits and execution history remain separate. Snapshot IDs retain fixed content.
+## Histories and transitions
 
-Widget IDs are local to their snapshot. Parents refer to widgets in that snapshot, and the hierarchy is acyclic. Several root widgets are allowed. Properties preserve missing values separately from explicit nulls. Source-prefixed properties can retain tool-specific details.
+A test run starts before its sequences. Sequence indexes increase within the run; observation indexes increase independently within each sequence. Sequences can be interleaved without mixing their executions. A run finishes after all its started sequences finish. Repeated captures remain separate observations, including when recorded-state content is shared.
 
-IDs and property names are nonblank strings without control characters. The producer supplies IDs that distinguish its records across runs and sources.
+Selection refers to the latest observation and a reported available-action/widget pair. Each sequence has at most one execution awaiting its execution result or resulting observation. A returned call awaits a later observation in the same sequence. An error retains its message and permits another selection; partial effects can be captured without inventing a completed transition. Finishing a sequence makes unfinished executions incomplete.
 
-## Run metadata
+Execution status is `awaiting_execution_result`, `awaiting_resulting_observation`, `failed`, `completed`, or `incomplete`. Recorded transitions retain transition-recording order; executions retain selection order. An observation-order link is a viewer relationship rather than an action inferred by this library.
 
-Run properties retain the optional [shared metadata](https://github.com/ferpasri/testar-evidence-specs/blob/main/docs/run-metadata.md):
+`ReconstructedEvidence.validate` checks without mutation. `apply` validates before changing records. Identical event retries return false; conflicting event IDs or changed state/description content are rejected. `EvidenceException` exposes a code and field when applicable. A failed validation leaves history and the saved log intact.
 
-| Property | Meaning |
-| --- | --- |
-| `evidence.origin` | The caller's descriptive tool, script, or integration name. |
-| `evidence.test_objective` | What the caller intends to investigate or verify. |
-| `evidence.adapter` | The adapter name, supplied by the adapter when known. |
-| `evidence.adapter_version` | The adapter's reported version, when known. |
+## Properties and oracle results
 
-Callers and adapters supply nonblank strings when information is available. The library preserves their original text, including spacing and Unicode, through recording, replay, and reopening. Omitted properties remain omitted. Origin labels are descriptive strings; there is no predefined list of execution styles or tools.
+Properties preserve nested JSON, arbitrary-precision integers and decimals, and explicit null. Missing fields remain distinct from supplied null where the contract permits both. Sequence indexes, observation indexes, timestamps, and artifact dimensions use `BigInteger` for the unsigned 64-bit range, with convenience constructors accepting `long`. Widget parents remain inside one state and form an acyclic hierarchy.
 
-The required `producer` field identifies the component producing evidence. An optional origin describes the caller, while adapter properties describe the translator. Generic library code retains the information supplied by an integration; the adapter knows its own identity and version. A test objective describes intent; check results record the conditions actually evaluated and their outcomes. Run identities keep executions separate even when their descriptions match.
+Oracle targets cover a run, sequence, observation, widget, property, action execution, or inclusive observation range. Sequence-level references belong to the declared sequence and parent run. A whole-run target omits its sequence reference. A property target can name an absent property. Broad targets do not establish individual property coverage.
 
-## Capture and property meanings
+`ExpectedValue.unspecified()` omits an expectation; `ExpectedValue.of(null)` records a supplied null. `ObservedValue` distinguishes value, established absence, and unknown information. Oracle severity is optional and preserves its source label and optional numeric value without imposing a universal range or changing oracle status. Each result remains separate, including repeated or late results after histories end.
+
+Optional assessment metadata in `oracle_details` preserves temporal semantics, reporting phase, and the corresponding ending reason. Sequence and run phases refer to the appropriate lifecycle. Ending a history does not change pending oracle statuses.
+
+## Metadata and capture
+
+Run and sequence properties preserve supplied origin, test objective, adapter, and adapter-version descriptions. Unicode and spacing are retained; omitted descriptions remain absent. Sequence metadata remains separate from parent-run metadata.
 
 Capture scope describes whether the supplied widget tree is complete, filtered, or unavailable. A tool can capture every available widget while saving only selected properties. The capture description identifies which properties are collected and, if known, explains exclusions or limitations.
 
-The library preserves `evidence.capture`, `evidence.omitted_properties`, and `evidence.property_aliases` in the supplied state or widget properties. An alias declares a second name for the same captured property within one record. The adapter implementer verifies the source property's meaning before declaring it. Cross-source comparisons use separately defined matching rules.
+Capture descriptions, property aliases, and known omissions are retained as supplied. Adapters establish source-property meanings. State-level `ui.title` represents a captured page, screen, or window title, while a widget's title attribute, visible text, and accessible name have distinct meanings. See the shared [capture guidance](https://github.com/ferpasri/testar-evidence-specs/blob/v0.3.0/docs/capture-evidence.md).
 
-A state-level `ui.title` records the application's page, screen, or window title; `ui.url` records its full captured address. A widget's title attribute, visible text, and accessible name have different meanings. The adapter preserves the actual source property and uses a common name only when its documented meaning agrees. The library retains supplied names and values.
+An observation retains all supplied available actions. Its scope states whether they are generated, eligible under the tool's selection rules, or of unknown scope. Availability and execution remain separate evidence.
 
-The shared [capture guidance](https://github.com/ferpasri/testar-evidence-specs/blob/main/docs/capture-evidence.md) defines the optional descriptions and aliases.
+## Reading and storage
 
-## Discovered actions and exploration
+`JsonlStore` manages `manifest.json`, `evidence.jsonl`, and referenced `artifacts/`. It holds an exclusive writer lock and refuses to overwrite existing evidence on creation. `record` validates the event and artifact hashes, appends newline-terminated UTF-8 JSON, and synchronizes before acknowledgment. A persistence failure invalidates the writer until reopening.
 
-An observation retains its candidates even when they are never selected. Candidate scope records whether the producer reports generated actions, actions marked eligible under its selection rules, or an unknown scope.
+`EvidenceReader.read` reconstructs history without opening a writer. `JsonlStore.evidence()` returns an independent snapshot. Records and returned collections preserve isolation from callers; supplied JSON properties are copied. `ReconstructedEvidence` is intended for one caller at a time. `testSequencesForRun`, `observationsForSequence`, `observationsForRecordedState`, and `executionsForSequence` support inspection; `incoming` and `outgoing` return recorded transitions.
 
-For example, a tool can report ten candidate actions and execute one. The observation keeps all ten candidates; the execution identifies the selected action and its widget binding.
+Artifacts use SHA-256 content identities and portable relative paths. Identical bytes reuse stored files. PNG, JPEG, and other media use `.png`, `.jpeg`, and `.bin` paths. Hash verification detects missing or changed bytes when recording or reading.
 
-Consumers can identify candidates with no recorded selection from that observation. Selection, accepted submission, and a resulting observation are separate stages. Comparing exploration across different visits requires a policy for matching observations and actions. Candidate lists describe what the producer reported, so their counts reflect that scope.
+Opening an unfinished final line fails. Explicit `recoverTail` validates the complete prefix and artifacts before removing only the unfinished fragment; complete invalid records are retained and reported. The reader rejects invalid UTF-8, duplicate keys, unknown structural fields, unsafe paths, and trailing JSON values. Records and manifests are limited to 16 MiB and nesting to 64 levels.
 
-## Events and execution order
+## Example and verification
 
-Each `EvidenceEvent` describes one reported event together with its stable identity and format version.
+The commented `RecordEvidence` example records one run and sequence, two observations, available actions, one completed transition, a PNG, and a property oracle result. Each execution reserves a distinct timestamped directory with optional SUT and test objective labels. Supplied metadata retains its original text; filename labels are sanitized separately.
 
-| Event | Recorded behavior |
-| --- | --- |
-| `run_started` | Registers the run, producer, and supplied properties. |
-| `action_defined` | Registers an action definition whose ID retains the same content. |
-| `observed` | Records a visit, with sequence numbers increasing within its run. |
-| `action_selected` | Selects a matching action/target pair from the latest observation. |
-| `action_submitted` | Records acceptance or rejection, with any rejection error. |
-| `action_result` | Links an accepted execution to a later observation in the same run. |
-| `checked` | Records one test oracle evaluation's outcome and supporting evidence. |
-| `run_finished` | Records the ending reason and marks outstanding executions incomplete. |
-
-A run starts before its observations, and action definitions precede their candidates. A run can have one execution awaiting submission or a result. Rejected submission permits another selection.
-
-`StateModel.validate` checks an event without applying it. `StateModel.apply` validates before updating the model. An identical event retry returns `false`. Different content using an existing event ID raises a conflict.
-
-`ExecutionRecord` exposes the selected action and its status: selected, submitted, rejected, observed, or incomplete. A completed action connects the observation before it to its resulting observation, forming a state-action-state execution trace represented by an `ExecutionLink`. Submission acceptance records whether the testing tool's runner, driver, or execution wrapper accepted the action. A rejected submission retains the reported error and has no completed result link. An executed click followed by an application message such as "Incorrect password" has a resulting observation containing that response. Test oracle results describe evaluated conditions separately.
-
-## Test oracle results
-
-A test oracle applies a rule to a target. The adapter records one evaluation as a `CheckResult`, with its name, rule, target, status, and supporting details. Captured properties and recorded evaluations remain separate evidence.
-
-Targets can identify a run, observation, state property, widget, widget property, execution, or inclusive observation sequence. Referenced records belong to the result's run. A widget belongs to its referenced observation. A property's presence can itself be evaluated, so the target may name an absent property.
-
-Passed and failed report whether the condition was satisfied. Pending means the evaluation had no definite result when recorded; unknown means the oracle could not determine an outcome. Error records an evaluation problem. Finishing a run retains these reported statuses. Results may arrive after the run finishes.
-
-Each report remains a separate result, including repeated reports for the same rule and target. The library preserves the optional `evidence.assessment` object in result details, including the reporting phase, temporal meaning, and supplied termination reason. An open-ended condition can remain pending when a run ends; an explicitly bounded evaluation concerns its named recorded observations. The test oracle supplies the outcome and the adapter records it. See [temporal assessments](https://github.com/ferpasri/testar-evidence-specs/blob/main/docs/check-evaluations.md#conditions-evaluated-over-time).
-
-`ExpectedValue.unspecified()` omits an expectation. `ExpectedValue.of(null)` records an explicit JSON null. An actual reading can contain a value, established absence, or unknown information; omitting the reading means none was supplied. Optional rule versions and parameter maps retain whether they were supplied.
-
-An invalid target raises `ModelException` with code `invalid_check_target`, identifying the affected field, such as `target.widget`. Rejection preserves the model and stored log.
-
-## Reading and inspecting recorded evidence
-
-The library keeps track of earlier records so it can validate new events. Reading saved events builds those same records and links in memory for inspection or continued recording. Simple lookup methods return runs, visits, snapshots, actions, candidates, executions, links, and check results. Visits within a run are ordered by sequence; executions and links follow selection order; evaluations follow recording order. General run, observation, action, and snapshot lists are sorted by ID.
-
-`incoming` and `outgoing` find completed links for a visit. `observationsForSnapshot` finds the visits referencing a snapshot. `observationsForRun` returns a run's ordered visits.
-
-Records are immutable. Lists are copied; properties and supplied JSON values are copied on entry and access. `StateModel` is intended for one caller at a time; `snapshot()` returns an independent model. Sequence numbers and timestamps use `BigInteger` for the full unsigned 64-bit range, with convenience constructors accepting nonnegative `long` values. JSON integer properties retain their precision.
-
-## Example trace directories
-
-The example takes a parent directory followed by optional SUT and test objective labels. It reserves a new directory named `<sut>_<test_objective>_trace-<local timestamp>`, including milliseconds. Labels are made safe for filenames and limited to 32 characters each. A collision adds `-2`, `-3`, and so on. Each run also receives distinct model and run identities. These labels describe demonstration records; they do not launch an application or choose a test script. The storage API continues accepting an explicit directory.
-
-The example accepts an optional origin and records it as `evidence.origin`. A supplied test objective is recorded as `evidence.test_objective`. An omitted description stays absent from run properties. Filename fallback labels are separate from these descriptions.
-
-## Storage
-
-`JsonlStore` manages a directory containing `manifest.json`, `evidence.jsonl`, and referenced `artifacts/`. `create` creates a collection; `open` validates and replays it for continued recording. `EvidenceReader.read` replays a collection without opening a writer.
-
-An exclusive file lock allows one writer per directory. `record` validates the event and its artifacts, appends one UTF-8 JSON line, then synchronizes it to storage before acknowledging the write. An I/O failure during append requires closing and reopening the store. Store operations are synchronized; `model()` returns an independent snapshot so callers cannot change the stored projection directly.
-
-`putArtifact` identifies supplied bytes by SHA-256 and reuses identical content. PNG paths end in `.png`, JPEG paths in `.jpeg`, and other media paths in `.bin`. The caller supplies the media type and optional dimensions. Referenced files are checked by hash when recording or reopening. Relative artifact paths keep evidence portable when the whole directory is moved.
-
-Each JSONL record ends with a newline. `recoverTail` acquires the writer lock, validates the complete preceding events and artifacts, and removes an unfinished final fragment. Complete invalid records cause recovery to fail without changing the log.
-
-The Java reader rejects invalid UTF-8, duplicate JSON keys, unknown structural fields, and trailing JSON values. Records and manifests are limited to 16 MiB; JSON nesting is limited to 64 levels. Evidence paths are checked for traversal and symbolic links.
-
-## Verification
-
-The [README](../README.md#shared-conformance-data) describes preparation of the newest published specs cases and the local cache. Tests discover released cases and verify their cached checksums.
-
-Reader tests compare accepted records or rejected targets with the released expectations. Producer tests write equivalent evidence through the public API, compare the complete accepted event history, verify field and artifact preservation, check identical retries and rejection behavior, and reopen the accepted evidence. Reader and producer tests also verify run ending reasons and the ordered, independent check results. The shared cases exercise capture descriptions and aliases, discovered candidates, scripted parameters, rejected submissions, and temporal results.
-
-Unit tests cover record validation, candidate preservation, repeated visits, execution ordering, evaluation targets, event retries, writer locking, artifact integrity, and recovery.
-
-Reader and producer conformance checks include supplied run metadata, omitted metadata, and flexible origin labels. Full event comparisons verify exact descriptions and omitted keys as well as the expected model summary.
+Reader and producer tests use the newest prepared specs release and verify its checksums. They compare all released expected summaries and accepted payloads, rejection prefixes, retries, reopen behavior, and artifacts. Unit tests cover immutable state identities, hierarchy, interleaved sequences, transitions, exact numbers, oracle targets/severity, writer locks, and recovery. See the [README](../README.md#shared-conformance-data) for preparation commands.

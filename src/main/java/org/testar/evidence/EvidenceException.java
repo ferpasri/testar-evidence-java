@@ -1,14 +1,14 @@
 package org.testar.evidence;
 
-public final class ModelException extends IllegalArgumentException {
+public final class EvidenceException extends IllegalArgumentException {
     private final String code;
     private final String field;
 
-    public ModelException(String code, String message) {
+    public EvidenceException(String code, String message) {
         this(code, null, message);
     }
 
-    public ModelException(String code, String field, String message) {
+    public EvidenceException(String code, String field, String message) {
         super(message);
         this.code = code;
         this.field = field;

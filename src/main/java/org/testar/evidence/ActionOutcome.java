@@ -4,8 +4,8 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 import java.util.Locale;
 
-public enum CheckStatus {
-    PASSED, FAILED, PENDING, UNKNOWN, ERROR;
+public enum ActionOutcome {
+    RETURNED, ERROR;
 
     @JsonValue
     public String wireName() {
@@ -13,7 +13,7 @@ public enum CheckStatus {
     }
 
     @JsonCreator
-    public static CheckStatus fromJson(String value) {
+    public static ActionOutcome fromJson(String value) {
         Validation.require(value != null && value.equals(value.toLowerCase(Locale.ROOT)),
             "invalid_record", "Enum values must use their lowercase wire names");
         return valueOf(value.toUpperCase(Locale.ROOT));

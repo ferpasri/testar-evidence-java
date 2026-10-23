@@ -30,19 +30,19 @@ class ConformanceTest {
         JsonNode expected = EvidenceJson.parse(Files.readString(source.resolve("expected.json")));
         byte[] before = Files.readAllBytes(source.resolve("evidence.jsonl"));
         if (expected.path("status").asText().equals("accepted")) {
-            StateModel model = EvidenceReader.read(source);
-            assertEquals(expected, summary(model));
-            assertHistory(model, events(source));
+            ReconstructedEvidence evidence = EvidenceReader.read(source);
+            assertEquals(expected, summary(evidence));
+            assertHistory(evidence, events(source));
         } else {
-            ModelException error = assertThrows(ModelException.class, () -> EvidenceReader.read(source));
+            EvidenceException error = assertThrows(EvidenceException.class, () -> EvidenceReader.read(source));
             assertEquals(expected.path("error").path("code").asText(), error.code());
             assertEquals(expected.path("error").path("field").asText(), error.field());
-            StateModel prefix = new StateModel(EvidenceJson.readManifest(Files.readString(source.resolve("manifest.json"))));
+            ReconstructedEvidence prefix = new ReconstructedEvidence(EvidenceJson.readManifest(Files.readString(source.resolve("manifest.json"))));
             for (EvidenceEvent event : events(source)) {
                 JsonNode previous = summary(prefix);
                 try {
                     prefix.apply(event);
-                } catch (ModelException rejected) {
+                } catch (EvidenceException rejected) {
                     assertEquals(expected.path("error"), error(rejected, event.id()));
                     assertEquals(previous, summary(prefix));
                     break;
@@ -59,31 +59,31 @@ class ConformanceTest {
         Manifest manifest = EvidenceJson.readManifest(Files.readString(source.resolve("manifest.json")));
         JsonNode failure = null;
         List<EvidenceEvent> accepted = new ArrayList<>();
-        StateModel result;
+        ReconstructedEvidence result;
         try (JsonlStore store = JsonlStore.create(destination, manifest)) {
             for (EvidenceEvent event : events(source)) {
-                if (event.event() instanceof Event.Observed observed) {
+                if (event.event() instanceof Event.ObservationRecorded observed) {
                     for (ArtifactReference artifact : observed.data().artifacts()) {
                         byte[] bytes = Files.readAllBytes(source.resolve(artifact.path()));
                         assertEquals(artifact, store.putArtifact(bytes, artifact.mediaType(), artifact.width(), artifact.height()));
                         assertArrayEquals(bytes, store.readArtifact(artifact));
                     }
                 }
-                JsonNode previous = summary(store.model());
+                JsonNode previous = summary(store.evidence());
                 byte[] before = Files.readAllBytes(destination.resolve("evidence.jsonl"));
                 try {
                     assertTrue(store.record(event));
                     accepted.add(event);
                     assertFalse(store.record(event), "Identical retry must not append another record");
-                    assertRecords(store.model(), List.of(event));
-                } catch (ModelException rejected) {
+                    assertRecords(store.evidence(), List.of(event));
+                } catch (EvidenceException rejected) {
                     failure = error(rejected, event.id());
-                    assertEquals(previous, summary(store.model()));
+                    assertEquals(previous, summary(store.evidence()));
                     assertArrayEquals(before, Files.readAllBytes(destination.resolve("evidence.jsonl")));
                     break;
                 }
             }
-            result = store.model();
+            result = store.evidence();
         }
         if (expected.path("status").asText().equals("accepted")) {
             assertNull(failure);
@@ -93,8 +93,8 @@ class ConformanceTest {
             assertEquals(expected.get("accepted_prefix"), summary(result));
         }
         try (JsonlStore reopened = JsonlStore.open(destination)) {
-            assertEquals(summary(result), summary(reopened.model()));
-            assertHistory(reopened.model(), accepted);
+            assertEquals(summary(result), summary(reopened.evidence()));
+            assertHistory(reopened.evidence(), accepted);
         }
         assertEquals(EvidenceJson.parse(Files.readString(source.resolve("manifest.json"))),
             EvidenceJson.parse(Files.readString(destination.resolve("manifest.json"))));
@@ -118,62 +118,69 @@ class ConformanceTest {
         }).toList();
     }
 
-    private static void assertHistory(StateModel model, List<EvidenceEvent> events) {
-        assertRecords(model, events);
-        List<CheckResult> checks = events.stream()
+    private static void assertHistory(ReconstructedEvidence evidence, List<EvidenceEvent> events) {
+        assertRecords(evidence, events);
+        List<OracleResult> checks = events.stream()
             .map(EvidenceEvent::event)
-            .filter(Event.Checked.class::isInstance)
-            .map(Event.Checked.class::cast)
-            .map(Event.Checked::data)
+            .filter(Event.OracleResultRecorded.class::isInstance)
+            .map(Event.OracleResultRecorded.class::cast)
+            .map(Event.OracleResultRecorded::data)
             .toList();
-        assertEquals(checks, model.checks(), "Each reported result remains separate and in recording order");
+        assertEquals(checks, evidence.oracleResults(), "Each reported result remains separate and in recording order");
     }
 
-    private static void assertRecords(StateModel model, List<EvidenceEvent> events) {
+    private static void assertRecords(ReconstructedEvidence evidence, List<EvidenceEvent> events) {
         for (EvidenceEvent envelope : events) {
             Event event = envelope.event();
-            if (event instanceof Event.RunStarted value) {
-                assertEquals(value.data(), model.run(value.data().id()).orElseThrow().run());
-            } else if (event instanceof Event.ActionDefined value) {
-                assertEquals(value.data(), model.action(value.data().id()).orElseThrow());
-            } else if (event instanceof Event.Observed value) {
-                assertEquals(value.data(), model.observation(value.data().id()).orElseThrow());
+            if (event instanceof Event.TestRunStarted value) {
+                assertEquals(value.data(), evidence.testRun(value.data().id()).orElseThrow().testRun());
+            } else if (event instanceof Event.ActionDescribed value) {
+                assertEquals(value.data(), evidence.actionDescription(value.data().id()).orElseThrow());
+            } else if (event instanceof Event.ObservationRecorded value) {
+                assertEquals(value.data(), evidence.observation(value.data().id()).orElseThrow());
             } else if (event instanceof Event.ActionSelected value) {
-                assertEquals(value.data(), model.execution(value.data().id()).orElseThrow().execution());
-            } else if (event instanceof Event.Checked value) {
-                assertTrue(model.checks().contains(value.data()));
-            } else if (event instanceof Event.RunFinished value) {
-                RunRecord run = model.run(value.run()).orElseThrow();
+                assertEquals(value.data(), evidence.actionExecution(value.data().id()).orElseThrow().actionExecution());
+            } else if (event instanceof Event.OracleResultRecorded value) {
+                assertTrue(evidence.oracleResults().contains(value.data()));
+            } else if (event instanceof Event.TestRunFinished value) {
+                TestRunRecord run = evidence.testRun(value.testRun()).orElseThrow();
                 assertTrue(run.finished());
                 assertEquals(value.reason(), run.reason());
             }
         }
     }
 
-    private static JsonNode error(ModelException error, String id) {
+    private static JsonNode error(EvidenceException error, String id) {
         return EvidenceJson.tree(Map.of("code", error.code(), "event", id, "field", error.field()));
     }
 
-    static JsonNode summary(StateModel model) {
+    static JsonNode summary(ReconstructedEvidence evidence) {
         ObjectNode result = (ObjectNode) EvidenceJson.parse("{}");
         result.put("status", "accepted");
         result.set("counts", EvidenceJson.tree(Map.of(
-            "events", model.eventCount(), "runs", model.runs().size(), "observations", model.observations().size(),
-            "actions", model.actions().size(), "executions", model.executions().size(), "checks", model.checks().size(),
-            "artifact_references", model.observations().stream().mapToInt(value -> value.artifacts().size()).sum(),
-            "concrete_states", model.snapshots().size())));
-        result.set("runs", EvidenceJson.tree(model.runs().stream().map(value ->
-            Map.of("id", value.run().id(), "status", value.finished() ? "finished" : "running")).toList()));
-        result.set("observations", EvidenceJson.tree(model.observations().stream().map(value ->
-            Map.of("id", value.id(), "run", value.run(), "sequence", value.sequence(), "concrete_state", value.state().id(),
-                "capture", value.state().capture(), "candidate_scope", value.candidateScope(),
-                "widget_ids", value.state().widgets().stream().map(Widget::id).toList(),
-                "candidates", value.candidates(), "artifact_ids", value.artifacts().stream().map(ArtifactReference::id).toList())).toList()));
-        result.set("actions", EvidenceJson.tree(model.actions().stream().map(value ->
-            Map.of("id", value.id(), "kind", value.kind())).toList()));
-        result.set("executions", EvidenceJson.tree(model.executions()));
-        result.set("checks", EvidenceJson.tree(model.checks().stream().map(EvidenceJson::checkTree).toList()));
-        result.set("concrete_states", EvidenceJson.tree(model.snapshots().stream().map(ConcreteState::id).toList()));
-        return EvidenceJson.parse(EvidenceJson.write(result));
+            "evidence_events", evidence.eventCount(), "test_runs", evidence.testRuns().size(),
+            "test_sequences", evidence.testSequences().size(), "observations", evidence.observations().size(),
+            "action_descriptions", evidence.actionDescriptions().size(), "action_executions", evidence.actionExecutions().size(),
+            "recorded_transitions", evidence.recordedTransitions().size(), "oracle_results", evidence.oracleResults().size(),
+            "artifact_references", evidence.observations().stream().mapToInt(value -> value.artifacts().size()).sum(),
+            "recorded_states", evidence.recordedStates().size())));
+        result.set("test_runs", EvidenceJson.tree(evidence.testRuns().stream().map(value ->
+            Map.of("id", value.testRun().id(), "status", value.finished() ? "finished" : "running")).toList()));
+        result.set("test_sequences", EvidenceJson.tree(evidence.testSequences().stream().map(value ->
+            Map.of("id", value.testSequence().id(), "test_run", value.testSequence().testRun(),
+                "sequence_index", value.testSequence().sequenceIndex(), "status", value.finished() ? "finished" : "running")).toList()));
+        result.set("observations", EvidenceJson.tree(evidence.observations().stream().map(value ->
+            Map.of("id", value.id(), "test_sequence", value.testSequence(), "observation_index", value.observationIndex(),
+                "recorded_state", value.recordedState().id(), "capture", value.recordedState().capture(),
+                "available_action_scope", value.availableActionScope(),
+                "widget_ids", value.recordedState().widgets().stream().map(Widget::id).toList(),
+                "available_actions", value.availableActions(), "artifact_ids", value.artifacts().stream().map(ArtifactReference::id).toList())).toList()));
+        result.set("action_descriptions", EvidenceJson.tree(evidence.actionDescriptions().stream().map(value ->
+            Map.of("id", value.id(), "action_type", value.actionType())).toList()));
+        result.set("action_executions", EvidenceJson.tree(evidence.actionExecutions()));
+        result.set("recorded_transitions", EvidenceJson.tree(evidence.recordedTransitions()));
+        result.set("oracle_results", EvidenceJson.tree(evidence.oracleResults().stream().map(EvidenceJson::oracleResultTree).toList()));
+        result.set("recorded_states", EvidenceJson.tree(evidence.recordedStates().stream().map(RecordedState::id).toList()));
+        return result;
     }
 }

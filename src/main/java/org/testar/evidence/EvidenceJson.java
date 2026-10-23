@@ -41,6 +41,9 @@ public final class EvidenceJson {
     }
 
     public static JsonNode tree(Object value) {
+        if (value instanceof OracleResult result) {
+            return oracleResultTree(result);
+        }
         return normalize(MAPPER.valueToTree(value));
     }
 
@@ -80,7 +83,9 @@ public final class EvidenceJson {
     }
 
     public static Manifest readManifest(String json) {
-        return convert(parse(json), Manifest.class);
+        JsonNode value = parse(json);
+        fields(value, Set.of("schema_version", "evidence_id"));
+        return convert(value, Manifest.class);
     }
 
     public static String writeManifest(Manifest manifest) {
@@ -91,24 +96,28 @@ public final class EvidenceJson {
         JsonNode root = parse(json);
         fields(root, Set.of("schema_version", "id", "event"));
         JsonNode wrapped = root.get("event");
-        fields(wrapped, Set.of("kind", "data"));
-        String kind = requiredText(wrapped, "kind");
+        fields(wrapped, Set.of("event_type", "data"));
+        String eventType = requiredText(wrapped, "event_type");
         JsonNode data = wrapped.get("data");
         Validation.require(data != null && data.isObject(), "invalid_record", "Event data must be an object");
-        Event event = switch (kind) {
-            case "run_started" -> new Event.RunStarted(convert(data, Run.class));
-            case "action_defined" -> new Event.ActionDefined(convert(data, ActionDefinition.class));
-            case "observed" -> new Event.Observed(readObservation(data));
-            case "action_selected" -> new Event.ActionSelected(convert(data, Execution.class));
-            case "action_submitted" -> {
-                Validation.require(data.has("accepted") && data.get("accepted").isBoolean(),
-                    "invalid_record", "Submission accepted must be a boolean");
-                yield convert(data, Event.ActionSubmitted.class);
+        Event event = switch (eventType) {
+            case "test_run_started" -> new Event.TestRunStarted(convert(data, TestRun.class));
+            case "test_sequence_started" -> new Event.TestSequenceStarted(convert(data, TestSequence.class));
+            case "action_described" -> new Event.ActionDescribed(convert(data, ActionDescription.class));
+            case "observation_recorded" -> new Event.ObservationRecorded(readObservation(data));
+            case "action_selected" -> {
+                Validation.require(data.has("target_widget"), "invalid_record", "target_widget is required and can be null");
+                yield new Event.ActionSelected(convert(data, ActionExecution.class));
             }
-            case "action_result" -> convert(data, Event.ActionResult.class);
-            case "checked" -> new Event.Checked(readCheck(data));
-            case "run_finished" -> convert(data, Event.RunFinished.class);
-            default -> throw new ModelException("invalid_record", "Unknown event kind: " + kind);
+            case "action_execution_reported" -> {
+                Validation.require(data.has("error"), "invalid_record", "error is required and can be null");
+                yield new Event.ActionExecutionReported(convert(data, ActionExecutionResult.class));
+            }
+            case "transition_recorded" -> convert(data, Event.TransitionRecorded.class);
+            case "oracle_result_recorded" -> new Event.OracleResultRecorded(readOracleResult(data));
+            case "test_sequence_finished" -> convert(data, Event.TestSequenceFinished.class);
+            case "test_run_finished" -> convert(data, Event.TestRunFinished.class);
+            default -> throw new EvidenceException("invalid_record", "Unknown event type: " + eventType);
         };
         JsonNode version = root.get("schema_version");
         Validation.require(version != null && version.isIntegralNumber() && version.canConvertToInt(),
@@ -117,33 +126,53 @@ public final class EvidenceJson {
     }
 
     private static Observation readObservation(JsonNode data) {
-        if (data.has("candidate_scope")) {
-            requiredText(data, "candidate_scope");
+        requiredText(data, "available_action_scope");
+        JsonNode state = data.get("recorded_state");
+        Validation.require(state != null && state.isObject(), "invalid_record", "recorded_state is required");
+        JsonNode widgets = state.get("widgets");
+        Validation.require(widgets != null && widgets.isArray(), "invalid_record", "widgets must be an array");
+        for (JsonNode widget : widgets) {
+            Validation.require(widget.has("parent"), "invalid_record", "Widget parent is required and can be null");
+        }
+        JsonNode available = data.get("available_actions");
+        Validation.require(available != null && available.isArray(), "invalid_record", "available_actions must be an array");
+        for (JsonNode action : available) {
+            Validation.require(action.has("target_widget"), "invalid_record", "Action target_widget is required and can be null");
         }
         return convert(data, Observation.class);
     }
 
-    private static CheckResult readCheck(JsonNode data) {
-        fields(data, Set.of("run", "name", "rule", "target", "status", "expected", "actual", "details"));
-        JsonNode rule = data.get("rule");
-        Validation.require(rule != null && rule.isObject(), "invalid_record", "Rule must be an object");
-        if (rule.has("version")) {
-            requiredText(rule, "version");
+    private static OracleResult readOracleResult(JsonNode data) {
+        fields(data, Set.of("test_run", "name", "oracle", "oracle_target", "oracle_status", "oracle_details"),
+            Set.of("test_sequence", "expected_value", "observed_value", "oracle_severity"));
+        JsonNode oracle = data.get("oracle");
+        fields(oracle, Set.of("id"), Set.of("version", "parameters"));
+        if (oracle.has("version")) {
+            requiredText(oracle, "version");
         }
-        if (rule.has("parameters")) {
-            Validation.require(rule.get("parameters").isObject(), "invalid_record", "Rule parameters must be an object");
+        if (oracle.has("parameters")) {
+            Validation.require(oracle.get("parameters").isObject(), "invalid_record", "Oracle parameters must be an object");
         }
-        CheckReading actual = null;
-        if (data.has("actual")) {
-            Validation.require(data.get("actual").isObject(), "invalid_record", "Actual reading must be an object");
-            actual = convert(data.get("actual"), CheckReading.class);
+        ObservedValue observed = null;
+        if (data.has("observed_value")) {
+            Validation.require(data.get("observed_value").isObject(), "invalid_record", "Observed value must be an object");
+            observed = convert(data.get("observed_value"), ObservedValue.class);
         }
-        ExpectedValue expected = data.has("expected")
-            ? new ExpectedValue(true, data.get("expected")) : ExpectedValue.unspecified();
-        Properties details = data.has("details") ? new Properties(data.get("details")) : Properties.empty();
-        return new CheckResult(requiredText(data, "run"), requiredText(data, "name"), convert(rule, CheckRule.class),
-            convert(data.get("target"), CheckTarget.class), convert(data.get("status"), CheckStatus.class),
-            expected, actual, details);
+        OracleSeverity severity = null;
+        if (data.has("oracle_severity")) {
+            JsonNode value = data.get("oracle_severity");
+            fields(value, Set.of("label"), Set.of("value"));
+            Validation.require(value.get("label").isTextual(), "invalid_record", "Severity label must be text");
+            if (value.has("value")) {
+                Validation.require(value.get("value").isNumber(), "invalid_record", "Severity value must be numeric");
+            }
+            severity = convert(value, OracleSeverity.class);
+        }
+        ExpectedValue expected = data.has("expected_value")
+            ? new ExpectedValue(true, data.get("expected_value")) : ExpectedValue.unspecified();
+        return new OracleResult(requiredText(data, "test_run"), data.has("test_sequence") ? requiredText(data, "test_sequence") : null,
+            requiredText(data, "name"), convert(oracle, Oracle.class), convert(data.get("oracle_target"), OracleTarget.class),
+            convert(data.get("oracle_status"), OracleStatus.class), expected, observed, severity, new Properties(data.get("oracle_details")));
     }
 
     public static String writeEvent(EvidenceEvent envelope) {
@@ -152,54 +181,66 @@ public final class EvidenceJson {
         root.put("id", envelope.id());
         ObjectNode wrapped = root.putObject("event");
         Event event = envelope.event();
-        String kind;
+        String eventType;
         JsonNode data;
-        if (event instanceof Event.RunStarted value) {
-            kind = "run_started";
+        if (event instanceof Event.TestRunStarted value) {
+            eventType = "test_run_started";
             data = tree(value.data());
-        } else if (event instanceof Event.ActionDefined value) {
-            kind = "action_defined";
+        } else if (event instanceof Event.TestSequenceStarted value) {
+            eventType = "test_sequence_started";
             data = tree(value.data());
-        } else if (event instanceof Event.Observed value) {
-            kind = "observed";
+        } else if (event instanceof Event.ActionDescribed value) {
+            eventType = "action_described";
+            data = tree(value.data());
+        } else if (event instanceof Event.ObservationRecorded value) {
+            eventType = "observation_recorded";
             data = tree(value.data());
         } else if (event instanceof Event.ActionSelected value) {
-            kind = "action_selected";
+            eventType = "action_selected";
             data = tree(value.data());
-        } else if (event instanceof Event.ActionSubmitted value) {
-            kind = "action_submitted";
+        } else if (event instanceof Event.ActionExecutionReported value) {
+            eventType = "action_execution_reported";
+            data = tree(value.data());
+        } else if (event instanceof Event.TransitionRecorded value) {
+            eventType = "transition_recorded";
             data = tree(value);
-        } else if (event instanceof Event.ActionResult value) {
-            kind = "action_result";
+        } else if (event instanceof Event.OracleResultRecorded value) {
+            eventType = "oracle_result_recorded";
+            data = oracleResultTree(value.data());
+        } else if (event instanceof Event.TestSequenceFinished value) {
+            eventType = "test_sequence_finished";
             data = tree(value);
-        } else if (event instanceof Event.Checked value) {
-            kind = "checked";
-            data = checkTree(value.data());
-        } else if (event instanceof Event.RunFinished value) {
-            kind = "run_finished";
+        } else if (event instanceof Event.TestRunFinished value) {
+            eventType = "test_run_finished";
             data = tree(value);
         } else {
-            throw new ModelException("invalid_record", "Unknown event");
+            throw new EvidenceException("invalid_record", "Unknown event");
         }
-        wrapped.put("kind", kind);
+        wrapped.put("event_type", eventType);
         wrapped.set("data", data);
         return write(root);
     }
 
-    public static JsonNode checkTree(CheckResult check) {
+    public static JsonNode oracleResultTree(OracleResult result) {
         ObjectNode data = object();
-        data.put("run", check.run());
-        data.put("name", check.name());
-        data.set("rule", tree(check.rule()));
-        data.set("target", tree(check.target()));
-        data.put("status", check.status().wireName());
-        if (check.expected().supplied()) {
-            data.set("expected", check.expected().value());
+        data.put("test_run", result.testRun());
+        if (result.testSequence() != null) {
+            data.put("test_sequence", result.testSequence());
         }
-        if (check.actual() != null) {
-            data.set("actual", tree(check.actual()));
+        data.put("name", result.name());
+        data.set("oracle", tree(result.oracle()));
+        data.set("oracle_target", tree(result.oracleTarget()));
+        data.put("oracle_status", result.oracleStatus().wireName());
+        if (result.expectedValue().supplied()) {
+            data.set("expected_value", result.expectedValue().value());
         }
-        data.set("details", check.details().asJson());
+        if (result.observedValue() != null) {
+            data.set("observed_value", tree(result.observedValue()));
+        }
+        if (result.oracleSeverity() != null) {
+            data.set("oracle_severity", tree(result.oracleSeverity()));
+        }
+        data.set("oracle_details", result.oracleDetails().asJson());
         return data;
     }
 
@@ -209,20 +250,27 @@ public final class EvidenceJson {
         return Validation.text(value.textValue(), field);
     }
 
-    private static void fields(JsonNode value, Set<String> allowed) {
-        Validation.require(value != null && value.isObject(), "invalid_record", "Expected a JSON object");
-        value.fieldNames().forEachRemaining(field -> Validation.require(allowed.contains(field),
-            "invalid_record", "Unknown field: " + field));
+    private static void fields(JsonNode value, Set<String> required) {
+        fields(value, required, Set.of());
     }
 
-    private static ModelException invalid(Exception error) {
+    private static void fields(JsonNode value, Set<String> required, Set<String> optional) {
+        Validation.require(value != null && value.isObject(), "invalid_record", "Expected a JSON object");
+        value.fieldNames().forEachRemaining(field -> Validation.require(required.contains(field) || optional.contains(field),
+            "invalid_record", "Unknown field: " + field));
+        for (String field : required) {
+            Validation.require(value.has(field), "invalid_record", "Missing field: " + field);
+        }
+    }
+
+    private static EvidenceException invalid(Exception error) {
         Throwable cause = error;
         while (cause.getCause() != null) {
             cause = cause.getCause();
         }
-        if (cause instanceof ModelException modelError) {
-            return modelError;
+        if (cause instanceof EvidenceException evidenceError) {
+            return evidenceError;
         }
-        return new ModelException("invalid_record", "Invalid JSON record: " + error.getMessage());
+        return new EvidenceException("invalid_record", "Invalid JSON record: " + error.getMessage());
     }
 }
