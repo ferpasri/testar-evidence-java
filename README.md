@@ -36,7 +36,7 @@ To compile and package without running tests:
 mvn -DskipTests package
 ```
 
-The library is built as `target/testar-evidence-0.2.1.jar`.
+The library is built as `target/testar-evidence-0.2.2.jar`.
 
 ## Import the library
 
@@ -52,7 +52,7 @@ A consuming Maven project can then declare:
 <dependency>
     <groupId>org.testar</groupId>
     <artifactId>testar-evidence</artifactId>
-    <version>0.2.1</version>
+    <version>0.2.2</version>
 </dependency>
 ```
 
@@ -65,7 +65,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.testar:testar-evidence:0.2.1'
+    implementation 'org.testar:testar-evidence:0.2.2'
 }
 ```
 
@@ -79,9 +79,13 @@ Public API classes are in `org.testar.evidence`.
 mvn test-compile exec:java "-Dexec.mainClass=org.testar.evidence.examples.LocalModel" "-Dexec.classpathScope=test"
 ```
 
-Each run creates a new directory under `target/traces/`, such as `demo_submit-form_trace-2026-10-22_15-30-12-123/`. A name collision adds a numeric suffix. Model and run identities are distinct on each execution, so earlier evidence is preserved. Load the complete generated directory in the dashboard.
+Each run creates a new directory under `target/traces/`, such as `demo_run_trace-2026-10-22_15-30-12-123/`. A name collision adds a numeric suffix. Model and run identities are distinct on each execution, so earlier evidence is preserved. Load the complete generated directory in the dashboard.
 
-To supply the parent directory, SUT label, and test objective label, add `"-Dexec.args=target/traces demo submit-form"`. Labels are stored in run properties as supplied; their filename versions are sanitized and limited to 32 characters each.
+To supply the parent directory, SUT label, and test objective label, add `"-Dexec.args=target/traces demo submit-form"`. Labels are stored in run properties as supplied; their filename versions are sanitized and limited to 32 characters each. A fourth argument supplies an optional origin. Without a test objective, the filename uses `run` and the objective property is omitted.
+
+## Run metadata
+
+Run properties support optional origin, test objective, adapter name, and adapter version using the [shared run metadata names](https://github.com/ferpasri/testar-evidence-specs/blob/main/docs/run-metadata.md). Supplied descriptions keep their original text; omitted descriptions stay omitted. See [the implementation specification](docs/SPEC.md#run-metadata) for their use.
 
 ## Reading and inspecting saved traces
 

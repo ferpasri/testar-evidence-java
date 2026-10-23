@@ -1,6 +1,7 @@
 package org.testar.evidence.examples;
 
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -33,12 +34,31 @@ public final class LocalModel {
     public static void main(String[] arguments) throws Exception {
         Path parent = arguments.length > 0 ? Path.of(arguments[0]) : Path.of("target", "traces");
         String sut = arguments.length > 1 ? arguments[1] : "demo";
-        String objective = arguments.length > 2 ? arguments[2] : "submit-form";
-        recordTrace(parent, sut, objective);
+        String testObjective = arguments.length > 2 ? arguments[2] : null;
+        String origin = arguments.length > 3 ? arguments[3] : null;
+        recordTrace(parent, sut, testObjective, origin);
     }
 
-    public static Path recordTrace(Path parent, String sut, String objective) throws Exception {
-        Path directory = TraceDirectories.create(parent, sut, objective);
+    public static Path recordTrace(Path parent, String sut, String testObjective) throws Exception {
+        return recordTrace(parent, sut, testObjective, null);
+    }
+
+    public static Path recordTrace(Path parent, String sut, String testObjective, String origin) throws Exception {
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("example.sut", sut);
+        if (testObjective != null) {
+            if (testObjective.isBlank()) {
+                throw new IllegalArgumentException("Test objective must be nonblank when supplied");
+            }
+            properties.put("evidence.test_objective", testObjective);
+        }
+        if (origin != null) {
+            if (origin.isBlank()) {
+                throw new IllegalArgumentException("Origin must be nonblank when supplied");
+            }
+            properties.put("evidence.origin", origin);
+        }
+        Path directory = TraceDirectories.create(parent, sut, testObjective == null ? "run" : testObjective);
         String identity = UUID.randomUUID().toString();
         String run = "example:run:" + identity;
         String action = run + ":activate";
@@ -49,7 +69,7 @@ public final class LocalModel {
             // An adapter supplies real captures; this example constructs demonstration records.
             store.record(new EvidenceEvent(run + ":start", new Event.RunStarted(
                 new Run(run, "example", identity,
-                    Properties.of(Map.of("example.sut", sut, "example.test_objective", objective))))));
+                    Properties.of(properties)))));
             store.record(new EvidenceEvent(run + ":define", new Event.ActionDefined(
                 new ActionDefinition(action, "activate", Properties.empty()))));
 
