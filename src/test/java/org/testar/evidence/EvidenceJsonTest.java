@@ -95,7 +95,7 @@ class EvidenceJsonTest {
     }
 
     @Test
-    void observationCopiesItsListsAndRejectsDuplicateCandidates() {
+    void observationCopiesItsListsAndRejectsDuplicateAvailableActions() {
         Observation original = TestData.observation("o1", 1);
         List<AvailableAction> candidates = new ArrayList<>(original.availableActions());
         Observation copied = new Observation(original.id(), original.testSequence(), original.observationIndex(), original.timestampMicros(),
@@ -113,7 +113,7 @@ class EvidenceJsonTest {
     }
 
     @Test
-    void invalidTextAndAcceptedSubmissionErrorsAreRejected() {
+    void invalidTextAndReturnedExecutionErrorsAreRejected() {
         assertThrows(EvidenceException.class, () -> new Manifest(" "));
         assertThrows(EvidenceException.class, () -> new ActionDescription("a\n", "click", Properties.empty()));
         assertThrows(EvidenceException.class, () -> new Event.ActionExecutionReported(new ActionExecutionResult("execution", ActionOutcome.RETURNED, "error")));

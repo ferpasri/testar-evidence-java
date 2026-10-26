@@ -1,118 +1,54 @@
-# TESTAR evidence for Java
+# TESTAR Evidence for Java
 
-A standalone Java library for validating and saving portable test execution evidence in the shared [TESTAR evidence format](https://github.com/ferpasri/testar-evidence-specs).
+A standalone library that validates, saves, and reads portable GUI test evidence following [TESTAR Evidence specs](https://github.com/ferpasri/testar-evidence-specs).
 
-Tool adapters supply runs, observed states, widgets, properties, available actions, executions, screenshots, and test oracle results. The library checks that the records and their references are valid, then saves them as portable evidence files.
-
-Every visit remains a separate observation. Each completed action connects the observation before the action to its resulting observation, forming a state-action-state execution trace. Available actions remain available even when never selected. Consumers can use the saved evidence to display traces or build abstract models.
-
-Captured properties and oracle evaluations are separate evidence. Oracle results identify what was evaluated, the oracle, its status, and any observed value or optional severity.
-
-The library preserves supplied property names and values, capture descriptions, known omissions, and declared aliases. Adapters use common names when the source provides the documented property. See the shared [capture guidance](https://github.com/ferpasri/testar-evidence-specs/blob/main/docs/capture-evidence.md).
-
-## Release versions
-
-Releases use `0.X.Y`. The `0.X` release series is shared with the specs and related evidence projects. Each project increments `Y` independently for fixes and improvements within that series. Different patch versions can coexist within the same release series.
+Adapters supply captured records and oracle results. The library validates references and lifecycle rules before writing, and preserves the reported evidence for inspection or separate abstraction.
 
 ## Build and test
 
-Use Java 17 or later and Maven 3.6.3 or later. Run these commands from this repository.
-
-Prepare the shared conformance cases:
+Use Java 17 or later and Maven 3.6.3 or later. From this repository:
 
 ```powershell
 mvn test-compile exec:java "-Dexec.mainClass=org.testar.evidence.tools.PrepareConformance" "-Dexec.classpathScope=test"
-```
-
-Run the tests and build the JAR:
-
-```powershell
 mvn verify
 ```
 
-To compile and package without running tests:
-
-```powershell
-mvn -DskipTests package
-```
-
-The library is built as `target/testar-evidence-0.3.0.jar`.
+The JAR is written under `target/`, with coordinates and version from [pom.xml](pom.xml).
 
 ## Import the library
 
-Install the tested library in your local Maven repository:
+Install the tested library into the local Maven repository:
 
 ```powershell
 mvn install
 ```
 
-A consuming Maven project can then declare:
+For Maven consumers, replace `LIBRARY_VERSION` with the selected version from `pom.xml`:
 
 ```xml
 <dependency>
     <groupId>org.testar</groupId>
     <artifactId>testar-evidence</artifactId>
-    <version>0.3.0</version>
+    <version>LIBRARY_VERSION</version>
 </dependency>
 ```
 
-A Gradle project can use:
+Gradle consumers can enable `mavenLocal()` and declare `org.testar:testar-evidence:LIBRARY_VERSION`. Public classes are in `org.testar.evidence`.
 
-```groovy
-repositories {
-    mavenLocal()
-    mavenCentral()
-}
+## Recording and reading
 
-dependencies {
-    implementation 'org.testar:testar-evidence:0.3.0'
-}
-```
+`JsonlStore.create(directory, manifest)` starts a fresh evidence collection. Report `EvidenceEvent` values through `record`. `EvidenceReader.read(directory)` reads saved evidence; `JsonlStore.open(directory)` reopens it for continued recording. `ReconstructedEvidence` holds validated records and relationships for inspection.
 
-Public API classes are in `org.testar.evidence`.
-
-## Example
-
-[RecordEvidence.java](src/test/java/org/testar/evidence/examples/RecordEvidence.java) records two demonstration observations, two available button actions, one completed action, and one property evaluation. Comments explain the recording steps.
-
-```powershell
-mvn test-compile exec:java "-Dexec.mainClass=org.testar.evidence.examples.RecordEvidence" "-Dexec.classpathScope=test"
-```
-
-Each run creates a new directory under `target/traces/`, such as `demo_run_trace-2026-10-22_15-30-12-123/`. A name collision adds a numeric suffix. Evidence, run, and sequence identities are distinct on each execution, so earlier evidence is preserved. Load the complete generated directory in the dashboard.
-
-To supply the parent directory, SUT label, and test objective label, add `"-Dexec.args=target/traces demo submit-form"`. Labels are stored in run properties as supplied; their filename versions are sanitized and limited to 32 characters each. A fourth argument supplies an optional origin. Without a test objective, the filename uses `run` and the objective property is omitted.
-
-## Run metadata
-
-Run properties support optional origin, test objective, adapter name, and adapter version using the [shared run metadata names](https://github.com/ferpasri/testar-evidence-specs/blob/main/docs/run-metadata.md). Supplied descriptions keep their original text; omitted descriptions stay omitted. See [the implementation specification](docs/SPEC.md#run-metadata) for their use.
-
-## Reading and inspecting saved traces
-
-`ReconstructedEvidence` holds recorded facts and relationships in memory for validation and inspection.
-
-The library remembers earlier records while writing so it can validate new ones. A test run contains one or more test sequences, each with its own observations and action executions. `EvidenceReader.read(directory)` reads saved evidence without changing it. `JsonlStore.open(directory)` validates existing records before continuing a recording. `JsonlStore.evidence()` returns an independent snapshot for inspection.
-
-`testSequencesForRun`, `observationsForSequence`, `executionsForSequence`, `incoming`, and `outgoing` provide simple lookups over the recorded history. Consumers decide how to build an abstract model from these traces.
+See the [commented recording example](docs/examples.md) for a complete sequence with observations, available actions, an execution, and an oracle result. The [implementation specification](docs/SPEC.md) describes value handling, record access, and persistence.
 
 ## Shared conformance data
 
-Each case supplies an input trace: `manifest.json`, `evidence.jsonl` (one Evidence Event per line), and referenced artifacts. The library reads the events to reconstruct the recorded history in memory. Tests compare a summary of that history with `expected.json`, which describes the expected records or rejection. Tests also verify complete accepted event contents and artifact bytes. The reconstructed evidence preserves recorded facts; it is separate from any later abstract model.
+Preparation selects the newest published [specs release](https://github.com/ferpasri/testar-evidence-specs/releases), including prereleases, and downloads its cases into ignored `target/conformance/`. It verifies archive boundaries and records the selected release and checksums. Failed preparation preserves the previous selection. Tests use the verified cache offline; repeat preparation when checking a newer release.
 
-See the shared [input trace, reconstructed evidence, and expected result explanation](https://github.com/ferpasri/testar-evidence-specs/blob/main/conformance/README.md#input-trace-reconstructed-evidence-and-expected-result) for the file roles, an event-sequence example, and reader/producer test behavior.
+Reader tests process each supplied trace. Producer tests record the same events through the public API and reopen the output. Both compare expected records, accepted payloads, rejection behavior, and artifacts. The specs own the [conformance contract](https://github.com/ferpasri/testar-evidence-specs/blob/main/conformance/README.md).
 
-The preparation command queries the public [specs releases](https://github.com/ferpasri/testar-evidence-specs/releases). It selects the newest publication by `published_at`, including prereleases and excluding draft or unpublished entries. Ties use the release ID. Publication order determines the selection.
+## Compatibility
 
-Preparation downloads the release archive over HTTPS and extracts its conformance files into the ignored `target/conformance/` directory. `current.json` records the selected release and locally computed SHA-256 checksums. Tests verify those checksums to detect changes to cached files.
+[pom.xml](pom.xml) records the package version and build requirements. `SCHEMA_VERSION` in [src/main/java/org/testar/evidence/Manifest.java](src/main/java/org/testar/evidence/Manifest.java) identifies the supported evidence format. Related projects share their first two release numbers and advance patches independently; format compatibility is checked separately.
 
-Archive paths, extraction sizes, and case completeness are checked. Preparation reports a failure and leaves the previous prepared selection intact. A failed latest-release lookup is reported to the caller.
-
-After successful preparation, tests use the cached cases offline. Running tests alone uses that prepared selection; repeat preparation to check compatibility with the latest release, including before tests in CI. Deleting `target/` removes both the cache and build output.
-
-Tests discover every released case directory. Reader tests load supplied evidence. Producer tests record equivalent evidence through the public API and reopen it. Both compare the records and rejected-case expectations, preserve artifact bytes, and verify that rejection leaves the accepted evidence unchanged. Cases include capture limits and aliases, unselected available actions, action execution results, independent sequences, optional oracle severity, and results reported during and after testing.
-
-## Documents
-
-- [Shared evidence semantics](https://github.com/ferpasri/testar-evidence-specs/blob/main/docs/evidence-semantics.md): the meaning of generic evidence.
-- [Implementation specification](docs/SPEC.md): this library's API and implemented behavior.
-- [TODO](TODO.md): planned work.
+See [TODO](TODO.md) for remaining work. Shared meanings, including capture and metadata conventions, remain in the specs repository.

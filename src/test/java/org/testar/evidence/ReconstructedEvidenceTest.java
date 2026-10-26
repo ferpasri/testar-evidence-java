@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 class ReconstructedEvidenceTest {
     @Test
-    void discoveredCandidatesRemainAvailableWhenOnlyOneIsExecuted() {
+    void reportedAvailableActionsRemainWhenOnlyOneIsExecuted() {
         ReconstructedEvidence evidence = TestData.evidence();
         TestData.submit(evidence);
         evidence.apply(new EvidenceEvent("observe-2", new Event.ObservationRecorded(TestData.observation("o2", 2))));
@@ -23,7 +23,7 @@ class ReconstructedEvidenceTest {
     }
 
     @Test
-    void repeatedSnapshotPreservesSeparateVisitsAndTheirOrder() {
+    void repeatedRecordedStatePreservesSeparateObservationsAndTheirOrder() {
         ReconstructedEvidence evidence = TestData.evidence();
         evidence.apply(new EvidenceEvent("observe-2", new Event.ObservationRecorded(TestData.observation("o2", 2))));
         assertEquals(1, evidence.recordedStates().size());
@@ -45,7 +45,7 @@ class ReconstructedEvidenceTest {
     }
 
     @Test
-    void selectionUsesLatestObservationAndTheExactCandidateBinding() {
+    void selectionUsesLatestObservationAndExactAvailableActionBinding() {
         ReconstructedEvidence evidence = TestData.evidence();
         evidence.apply(new EvidenceEvent("observe-2", new Event.ObservationRecorded(TestData.observation("o2", 2))));
         assertThrows(EvidenceException.class, () -> evidence.apply(new EvidenceEvent("stale",
@@ -56,7 +56,7 @@ class ReconstructedEvidenceTest {
     }
 
     @Test
-    void oneOutstandingExecutionIsAllowedForEachRun() {
+    void oneOutstandingExecutionIsAllowedForEachSequence() {
         ReconstructedEvidence evidence = TestData.evidence();
         TestData.select(evidence);
         assertThrows(EvidenceException.class, () -> evidence.apply(new EvidenceEvent("select-again",
@@ -65,7 +65,7 @@ class ReconstructedEvidenceTest {
     }
 
     @Test
-    void rejectedSubmissionKeepsItsErrorAndAllowsAnotherSelection() {
+    void executionErrorKeepsItsMessageAndAllowsAnotherSelection() {
         ReconstructedEvidence evidence = TestData.evidence();
         TestData.select(evidence);
         evidence.apply(new EvidenceEvent("reject", new Event.ActionExecutionReported(new ActionExecutionResult("execution", ActionOutcome.ERROR, "Target disappeared"))));
@@ -77,7 +77,7 @@ class ReconstructedEvidenceTest {
     }
 
     @Test
-    void resultsRequireAcceptedSubmissionAndAForwardObservationInTheSameRun() {
+    void transitionsRequireReturnedExecutionAndLaterObservationInTheSameSequence() {
         ReconstructedEvidence evidence = TestData.evidence();
         TestData.select(evidence);
         assertThrows(EvidenceException.class, () -> evidence.apply(new EvidenceEvent("early", new Event.TransitionRecorded("execution", "o1"))));
@@ -94,7 +94,7 @@ class ReconstructedEvidenceTest {
     }
 
     @Test
-    void finishingRunMarksOutstandingExecutionIncompleteAndAllowsLateEvaluations() {
+    void finishingSequenceMarksOutstandingExecutionIncompleteAndAllowsLateOracleResults() {
         ReconstructedEvidence evidence = TestData.evidence();
         TestData.submit(evidence);
         evidence.apply(new EvidenceEvent("finish", new Event.TestSequenceFinished("run", "deadline")));
