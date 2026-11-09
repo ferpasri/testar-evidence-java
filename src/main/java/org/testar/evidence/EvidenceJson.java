@@ -3,6 +3,7 @@ package org.testar.evidence;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.core.StreamReadFeature;
+import com.fasterxml.jackson.core.StreamWriteConstraints;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.MapperFeature;
@@ -16,6 +17,7 @@ import java.util.Set;
 public final class EvidenceJson {
     private static final ObjectMapper MAPPER = JsonMapper.builder(JsonFactory.builder()
         .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+        .streamWriteConstraints(StreamWriteConstraints.builder().maxNestingDepth(64).build())
         .streamReadConstraints(StreamReadConstraints.builder().maxNestingDepth(64)
             .maxStringLength(16 * 1024 * 1024).build()).build())
         .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
@@ -44,7 +46,12 @@ public final class EvidenceJson {
         if (value instanceof OracleResult result) {
             return oracleResultTree(result);
         }
-        return normalize(MAPPER.valueToTree(value));
+        return normalize(rawTree(value));
+    }
+
+    /** Internal conversion; callers validate input or supply immutable validated records. */
+    static JsonNode rawTree(Object value) {
+        return MAPPER.valueToTree(value);
     }
 
     static JsonNode normalize(JsonNode value) {
@@ -185,34 +192,34 @@ public final class EvidenceJson {
         JsonNode data;
         if (event instanceof Event.TestRunStarted value) {
             eventType = "test_run_started";
-            data = tree(value.data());
+            data = rawTree(value.data());
         } else if (event instanceof Event.TestSequenceStarted value) {
             eventType = "test_sequence_started";
-            data = tree(value.data());
+            data = rawTree(value.data());
         } else if (event instanceof Event.ActionDescribed value) {
             eventType = "action_described";
-            data = tree(value.data());
+            data = rawTree(value.data());
         } else if (event instanceof Event.ObservationRecorded value) {
             eventType = "observation_recorded";
-            data = tree(value.data());
+            data = rawTree(value.data());
         } else if (event instanceof Event.ActionSelected value) {
             eventType = "action_selected";
-            data = tree(value.data());
+            data = rawTree(value.data());
         } else if (event instanceof Event.ActionExecutionReported value) {
             eventType = "action_execution_reported";
-            data = tree(value.data());
+            data = rawTree(value.data());
         } else if (event instanceof Event.TransitionRecorded value) {
             eventType = "transition_recorded";
-            data = tree(value);
+            data = rawTree(value);
         } else if (event instanceof Event.OracleResultRecorded value) {
             eventType = "oracle_result_recorded";
             data = oracleResultTree(value.data());
         } else if (event instanceof Event.TestSequenceFinished value) {
             eventType = "test_sequence_finished";
-            data = tree(value);
+            data = rawTree(value);
         } else if (event instanceof Event.TestRunFinished value) {
             eventType = "test_run_finished";
-            data = tree(value);
+            data = rawTree(value);
         } else {
             throw new EvidenceException("invalid_record", "Unknown event");
         }

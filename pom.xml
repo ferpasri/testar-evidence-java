@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.testar</groupId>
     <artifactId>testar-evidence</artifactId>
-    <version>0.3.0</version>
+    <version>0.3.1</version>
     <name>TESTAR Evidence</name>
     <description>Generic records and portable test execution evidence</description>
     <properties>

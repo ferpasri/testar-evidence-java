@@ -54,9 +54,11 @@ public final class EvidenceReader {
                     String json = decode(line.toByteArray());
                     try {
                         EvidenceEvent event = EvidenceJson.readEvent(json);
-                        evidence.validate(event);
+                        boolean newEvent = evidence.validate(event);
                         verifyArtifacts(root, event);
-                        evidence.apply(event);
+                        if (newEvent) {
+                            evidence.applyValidated(event);
+                        }
                     } catch (EvidenceException error) {
                         throw new EvidenceException(error.code(), error.field(),
                             "evidence.jsonl line " + lineNumber + ": " + error.getMessage());

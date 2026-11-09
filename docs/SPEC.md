@@ -28,7 +28,7 @@ Source properties, capture descriptions, aliases, omissions, and optional run/se
 
 ## Reading and storage
 
-`JsonlStore.create(directory, manifest)` refuses existing evidence files and holds an exclusive writer lock. Each successful record is validated with artifact hashes, appended as newline-terminated UTF-8 JSON, and synchronized before acknowledgment. A persistence failure invalidates the writer until reopening.
+`JsonlStore.create(directory, manifest)` refuses existing evidence files and holds an exclusive writer lock. Each successful record is validated with artifact hashes, appended as newline-terminated UTF-8 JSON, and synchronized before acknowledgment. A persistence failure invalidates the writer until reopening. Record constructors check supplied values. The writer serializes these immutable records directly, checks references and lifecycle once, and updates in-memory evidence only after the synchronized write succeeds.
 
 `EvidenceReader.read(directory)` validates saved evidence without opening a writer. `JsonlStore.open(directory)` validates it before continued recording. `JsonlStore.evidence()` returns an independent snapshot. Supplied JSON properties are copied; returned records and collections remain isolated from callers. `ReconstructedEvidence` is intended for one caller at a time.
 

@@ -147,6 +147,20 @@ class JsonlStoreTest {
         }
     }
 
+    @Test
+    void readingAnIdenticalRetriedStartDoesNotReopenAFinishedRun() throws IOException {
+        Path root = temporary.resolve("evidence");
+        try (JsonlStore store = JsonlStore.create(root, new Manifest("evidence"))) {
+            store.record(start());
+            store.record(new EvidenceEvent("finish", new Event.TestRunFinished("test-run", "done")));
+        }
+        // A physically repeated event remains a retry, even after later events changed the run.
+        Files.writeString(root.resolve("evidence.jsonl"), EvidenceJson.writeEvent(start()) + "\n", StandardOpenOption.APPEND);
+        ReconstructedEvidence read = EvidenceReader.read(root);
+        assertEquals(2, read.eventCount());
+        assertTrue(read.testRun("test-run").orElseThrow().finished());
+    }
+
     private static EvidenceEvent start() {
         return new EvidenceEvent("start", new Event.TestRunStarted(new TestRun("test-run", "sample", "session", Properties.empty())));
     }

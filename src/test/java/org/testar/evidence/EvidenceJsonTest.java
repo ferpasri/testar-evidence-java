@@ -12,6 +12,20 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class EvidenceJsonTest {
     @Test
+    void eventNestingLimitIncludesItsSurroundingStructure() {
+        ObjectNode properties = (ObjectNode) EvidenceJson.parse("{}");
+        ObjectNode nested = properties;
+        for (int index = 0; index < 62; index++) {
+            nested = nested.putObject("nested");
+        }
+        Properties accepted = new Properties(properties);
+        EvidenceEvent event = new EvidenceEvent("deep", new Event.TestRunStarted(
+            new TestRun("run", "example", "run", accepted)));
+        // Properties can fit on their own while the enclosing Evidence Event exceeds the limit.
+        assertThrows(EvidenceException.class, () -> EvidenceJson.writeEvent(event));
+    }
+
+    @Test
     void missingAndExplicitNullPropertiesRemainDifferentAndImmutable() {
         ObjectNode input = (ObjectNode) EvidenceJson.parse("{\"nullValue\":null,\"nested\":{\"value\":1}}");
         Properties properties = new Properties(input);

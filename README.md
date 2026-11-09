@@ -52,3 +52,5 @@ Reader tests process each supplied trace. Producer tests record the same events 
 [pom.xml](pom.xml) records the package version and build requirements. `SCHEMA_VERSION` in [src/main/java/org/testar/evidence/Manifest.java](src/main/java/org/testar/evidence/Manifest.java) identifies the supported evidence format. Related projects share their first two release numbers and advance patches independently; format compatibility is checked separately.
 
 See [TODO](TODO.md) for remaining work. Shared meanings, including capture and metadata conventions, remain in the specs repository.
+
+The [shared Java evidence and ASM benchmark](https://github.com/ferpasri/testar-state-model-asm-java/blob/main/benchmarks/README.md) measures record construction, encoding, synchronized writing, reading, and ASM processing using the same trace data.

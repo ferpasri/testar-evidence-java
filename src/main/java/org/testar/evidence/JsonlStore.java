@@ -83,7 +83,7 @@ public final class JsonlStore implements AutoCloseable {
             failed = true;
             throw error;
         }
-        evidence.apply(event);
+        evidence.applyValidated(event);
         return true;
     }
 

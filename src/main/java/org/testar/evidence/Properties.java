@@ -21,7 +21,7 @@ public final class Properties {
     }
 
     public static Properties of(Map<String, ?> values) {
-        return new Properties(EvidenceJson.tree(values));
+        return new Properties(EvidenceJson.rawTree(values));
     }
 
     public boolean contains(String name) {

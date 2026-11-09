@@ -79,6 +79,11 @@ public final class ReconstructedEvidence {
         if (!validate(envelope)) {
             return false;
         }
+        return applyValidated(envelope);
+    }
+
+    /** Apply an immutable event after reference checks, including after a synchronized write. */
+    boolean applyValidated(EvidenceEvent envelope) {
         Event event = envelope.event();
         if (event instanceof Event.TestRunStarted value) {
             testRuns.put(value.data().id(), new TestRunRecord(value.data(), false, null));
